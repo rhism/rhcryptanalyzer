@@ -1,24 +1,359 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useCallback, useEffect, useState } from "react";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
+type PairKey = "bnbidr" | "btcidr" | "ethidr" | "solidr";
+
+const PAIRS: { value: PairKey; label: string }[] = [
+  { value: "bnbidr", label: "BNB / IDR" },
+  { value: "btcidr", label: "BTC / IDR" },
+  { value: "ethidr", label: "ETH / IDR" },
+  { value: "solidr", label: "SOL / IDR" },
+];
+
+type Ticker = {
+  last: string;
+  high: string;
+  low: string;
+  vol_idr?: string;
+  buy?: string;
+  sell?: string;
+};
+
+type Indicators = {
+  rsi14: number | null;
+  ma7: number | null;
+  ma25: number | null;
+  closes: number[];
+};
+
+type GeminiAnalysis = {
+  kesimpulan: string;
+  rekomendasi: "BUY" | "HOLD" | "SELL" | string;
+  alasan: string;
+  support: string;
+  resistance: string;
+  confidence: "LOW" | "MEDIUM" | "HIGH" | string;
+};
+
+function sma(values: number[], period: number): number | null {
+  if (values.length < period) return null;
+  const slice = values.slice(values.length - period);
+  return slice.reduce((a, b) => a + b, 0) / period;
+}
+
+function rsi(values: number[], period = 14): number | null {
+  if (values.length < period + 1) return null;
+  let gains = 0;
+  let losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const diff = values[i] - values[i - 1];
+    if (diff >= 0) gains += diff;
+    else losses -= diff;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  for (let i = period + 1; i < values.length; i++) {
+    const diff = values[i] - values[i - 1];
+    const gain = diff > 0 ? diff : 0;
+    const loss = diff < 0 ? -diff : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+  }
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - 100 / (1 + rs);
+}
+
+function formatIDR(n: number | string | null | undefined): string {
+  if (n === null || n === undefined || n === "") return "-";
+  const num = typeof n === "string" ? Number(n) : n;
+  if (!Number.isFinite(num)) return String(n);
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(num);
+}
+
+async function fetchTicker(pair: PairKey): Promise<Ticker> {
+  const res = await fetch(`https://indodax.com/api/ticker/${pair}`);
+  if (!res.ok) throw new Error(`Ticker HTTP ${res.status}`);
+  const json = await res.json();
+  const t = json?.ticker;
+  if (!t) throw new Error("Ticker response invalid");
+  return t as Ticker;
+}
+
+async function fetchCandles(pair: PairKey): Promise<number[]> {
+  const now = Math.floor(Date.now() / 1000);
+  const from = now - 60 * 60 * 24 * 30;
+  const symbol = pair.toUpperCase();
+  const url = `https://indodax.com/tradingview/history?symbol=${symbol}&resolution=1D&from=${from}&to=${now}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Candles HTTP ${res.status}`);
+  const json = await res.json();
+  if (!json?.c || !Array.isArray(json.c)) throw new Error("Candles response invalid");
+  return (json.c as number[]).map((n) => Number(n)).filter((n) => Number.isFinite(n));
+}
+
+async function askGemini(
+  pair: PairKey,
+  ticker: Ticker,
+  ind: Indicators,
+  apiKey: string,
+): Promise<GeminiAnalysis> {
+  const prompt = `Kamu adalah analis kripto. Analisis data berikut untuk pasangan ${pair.toUpperCase()} di Indodax dan HANYA balas dengan JSON valid tanpa markdown code fence atau teks lain.
+
+Data ticker:
+- Harga terakhir: ${ticker.last}
+- High 24h: ${ticker.high}
+- Low 24h: ${ticker.low}
+- Bid: ${ticker.buy ?? "-"}
+- Ask: ${ticker.sell ?? "-"}
+
+Indikator (dihitung dari 30 candle harian):
+- RSI14: ${ind.rsi14?.toFixed(2) ?? "-"}
+- MA7: ${ind.ma7?.toFixed(2) ?? "-"}
+- MA25: ${ind.ma25?.toFixed(2) ?? "-"}
+
+Balas dengan JSON persis struktur ini (tanpa tambahan apapun):
+{"kesimpulan":"...","rekomendasi":"BUY|HOLD|SELL","alasan":"minimal 3 kalimat","support":"level harga support kasar dalam Rupiah","resistance":"level harga resistance kasar dalam Rupiah","confidence":"LOW|MEDIUM|HIGH"}`;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json", temperature: 0.4 },
+      }),
+    },
+  );
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Gemini HTTP ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  const json = await res.json();
+  const text: string | undefined = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Gemini: empty response");
+  const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+  try {
+    return JSON.parse(cleaned) as GeminiAnalysis;
+  } catch {
+    throw new Error("Gemini: gagal parse JSON. Raw: " + cleaned.slice(0, 200));
+  }
+}
+
+function recoStyle(reco: string): { bg: string; text: string; label: string } {
+  const r = reco?.toUpperCase();
+  if (r === "BUY") return { bg: "bg-emerald-500/20 border-emerald-400", text: "text-emerald-300", label: "BUY" };
+  if (r === "SELL") return { bg: "bg-red-500/20 border-red-400", text: "text-red-300", label: "SELL" };
+  return { bg: "bg-yellow-500/20 border-yellow-400", text: "text-yellow-200", label: "HOLD" };
+}
+
+function confidenceStyle(c: string): string {
+  const v = c?.toUpperCase();
+  if (v === "HIGH") return "bg-emerald-500/20 text-emerald-200 border-emerald-400/50";
+  if (v === "LOW") return "bg-red-500/20 text-red-200 border-red-400/50";
+  return "bg-yellow-500/20 text-yellow-200 border-yellow-400/50";
+}
+
 function Index() {
+  const [pair, setPair] = useState<PairKey>("bnbidr");
+  const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+  const [ticker, setTicker] = useState<Ticker | null>(null);
+  const [indicators, setIndicators] = useState<Indicators | null>(null);
+  const [analysis, setAnalysis] = useState<GeminiAnalysis | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+
+  const run = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setAnalysis(null);
+    setTicker(null);
+    setIndicators(null);
+    try {
+      if (!apiKey) {
+        throw new Error(
+          "VITE_GEMINI_API_KEY belum di-set. Tambahkan di file .env lalu restart dev server.",
+        );
+      }
+      setStage("Fetching ticker Indodax…");
+      let t: Ticker;
+      let closes: number[];
+      try {
+        [t, closes] = await Promise.all([fetchTicker(pair), fetchCandles(pair)]);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(
+          `Gagal ambil data, kemungkinan CORS diblokir Indodax. Perlu proxy server. (${msg})`,
+        );
+      }
+      setTicker(t);
+      const ind: Indicators = {
+        rsi14: rsi(closes, 14),
+        ma7: sma(closes, 7),
+        ma25: sma(closes, 25),
+        closes,
+      };
+      setIndicators(ind);
+
+      setStage("Meminta analisis Gemini…");
+      const a = await askGemini(pair, t, ind, apiKey);
+      setAnalysis(a);
+      setUpdatedAt(new Date());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+      setStage("");
+    }
+  }, [pair, apiKey]);
+
+  useEffect(() => {
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pair]);
+
+  const reco = analysis ? recoStyle(analysis.rekomendasi) : null;
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="min-h-screen px-4 py-8 sm:px-6 sm:py-12">
+      <div className="mx-auto max-w-4xl">
+        <header className="mb-8 flex flex-col gap-4 sm:mb-10">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-5xl">
+              <span className="text-neon-pink">Kripto</span>{" "}
+              <span className="text-neon-orange">Analyzer</span>
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+              Indodax ticker + RSI/MA hitung sendiri + rekomendasi Gemini. Read-only, no backend.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <label className="text-xs uppercase tracking-widest text-neon-orange">Pair</label>
+            <select
+              value={pair}
+              onChange={(e) => setPair(e.target.value as PairKey)}
+              disabled={loading}
+              className="rounded-md border border-[color:var(--neon-magenta)] bg-[color:var(--neon-purple)]/60 px-4 py-2 text-sm font-medium text-white outline-none transition focus:border-[color:var(--neon-pink)] focus:ring-2 focus:ring-[color:var(--neon-pink)]/50 disabled:opacity-50"
+            >
+              {PAIRS.map((p) => (
+                <option key={p.value} value={p.value} className="bg-[#1B1035]">
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={run}
+              disabled={loading}
+              className="neon-glow-pink rounded-md border border-[color:var(--neon-pink)] bg-gradient-to-r from-[color:var(--neon-magenta)] to-[color:var(--neon-pink)] px-5 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-auto"
+            >
+              {loading ? "Loading…" : "Refresh Analysis"}
+            </button>
+          </div>
+        </header>
+
+        {loading && (
+          <div className="neon-card mb-6 rounded-xl p-6 text-center">
+            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[color:var(--neon-pink)] border-t-transparent" />
+            <p className="text-sm text-white/80">{stage || "Loading…"}</p>
+          </div>
+        )}
+
+        {error && !loading && (
+          <div className="mb-6 rounded-xl border border-red-400/60 bg-red-500/15 p-5 text-sm text-red-100 shadow-[0_0_16px_rgba(239,68,68,0.35)]">
+            <p className="mb-1 font-semibold uppercase tracking-wider text-red-300">Error</p>
+            <p>{error}</p>
+          </div>
+        )}
+
+        {ticker && !loading && (
+          <section className="neon-card mb-6 rounded-2xl p-5 sm:p-7">
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-neon-orange">
+              Market snapshot — {pair.toUpperCase()}
+            </h2>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <Stat label="Harga sekarang" value={formatIDR(ticker.last)} accent />
+              <Stat label="High 24h" value={formatIDR(ticker.high)} />
+              <Stat label="Low 24h" value={formatIDR(ticker.low)} />
+              <Stat label="RSI 14" value={indicators?.rsi14 != null ? indicators.rsi14.toFixed(2) : "-"} />
+              <Stat label="MA 7" value={indicators?.ma7 != null ? formatIDR(indicators.ma7) : "-"} />
+              <Stat label="MA 25" value={indicators?.ma25 != null ? formatIDR(indicators.ma25) : "-"} />
+            </div>
+          </section>
+        )}
+
+        {analysis && reco && !loading && (
+          <section className="neon-card rounded-2xl p-5 sm:p-7">
+            <div className="mb-5 flex flex-wrap items-center gap-3">
+              <div
+                className={`rounded-lg border-2 px-5 py-2 text-2xl font-extrabold tracking-widest ${reco.bg} ${reco.text}`}
+              >
+                {reco.label}
+              </div>
+              <span
+                className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-widest ${confidenceStyle(analysis.confidence)}`}
+              >
+                Confidence: {analysis.confidence}
+              </span>
+              {updatedAt && (
+                <span className="ml-auto text-xs text-white/60">
+                  Updated {updatedAt.toLocaleString("id-ID")}
+                </span>
+              )}
+            </div>
+
+            <div className="mb-5 rounded-lg border border-[color:var(--neon-magenta)]/40 bg-black/30 p-4">
+              <p className="mb-1 text-xs uppercase tracking-widest text-neon-orange">Kesimpulan</p>
+              <p className="text-base font-medium text-white">{analysis.kesimpulan}</p>
+            </div>
+
+            <div className="mb-5">
+              <p className="mb-1 text-xs uppercase tracking-widest text-neon-orange">Alasan</p>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-white/85">
+                {analysis.alasan}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 p-4">
+                <p className="text-xs uppercase tracking-widest text-emerald-300">Support</p>
+                <p className="mt-1 text-lg font-bold text-emerald-100">{analysis.support}</p>
+              </div>
+              <div className="rounded-lg border border-red-400/40 bg-red-500/10 p-4">
+                <p className="text-xs uppercase tracking-widest text-red-300">Resistance</p>
+                <p className="mt-1 text-lg font-bold text-red-100">{analysis.resistance}</p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        <footer className="mt-10 text-center text-xs text-white/50">
+          Personal tools · Data: Indodax public API · AI: Gemini 2.5 Flash · Bukan saran finansial.
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="rounded-lg border border-[color:var(--neon-magenta)]/30 bg-black/25 p-3">
+      <p className="text-[10px] uppercase tracking-widest text-white/60">{label}</p>
+      <p className={`mt-1 text-lg font-bold ${accent ? "text-neon-pink" : "text-white"}`}>
+        {value}
+      </p>
     </div>
   );
 }
