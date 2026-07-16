@@ -49,10 +49,17 @@
   --input: oklch(0.30 0.10 305);
   --ring: oklch(0.65 0.24 5);
 
-  --neon-purple: #4A1E5C;
-  --neon-magenta: #B03A6B;
-  --neon-pink: #F04F6E;
-  --neon-orange: #F4A23C;
+  --neon-purple: #1A1A1F;
+  --neon-magenta: #2DE0C7;
+  --neon-pink: #FF4D9D;
+  --neon-orange: #F5E663;
+
+  --surface-bg: #0D0D0F;
+  --surface-card: #18181C;
+  --surface-card-2: #1A1A1F;
+  --neon-turquoise: #2DE0C7;
+  --neon-yellow: #F5E663;
+  --neon-warm-orange: #FF8A3D;
 }
 
 @layer base {
@@ -60,43 +67,57 @@
     border-color: var(--color-border);
   }
   html, body {
-    background-color: #1B1035;
-    color: var(--color-foreground);
+    background-color: var(--surface-bg);
+    color: #F2F2F5;
     font-family: var(--font-sans);
     min-height: 100vh;
   }
   body {
-    background-image:
-      radial-gradient(ellipse at top left, rgba(176, 58, 107, 0.25), transparent 50%),
-      radial-gradient(ellipse at bottom right, rgba(244, 162, 60, 0.15), transparent 50%),
-      radial-gradient(ellipse at center, rgba(74, 30, 92, 0.4), transparent 70%);
+    background-image: none;
   }
 }
 
 @utility neon-card {
-  background: linear-gradient(145deg, rgba(74, 30, 92, 0.6), rgba(27, 16, 53, 0.85));
-  border: 1px solid rgba(240, 79, 110, 0.35);
+  background: var(--surface-card);
+  border: 1px solid rgba(255, 77, 157, 0.35);
   box-shadow:
-    0 0 20px rgba(240, 79, 110, 0.15),
-    0 0 40px rgba(176, 58, 107, 0.1),
-    inset 0 1px 0 rgba(244, 162, 60, 0.1);
-  backdrop-filter: blur(8px);
+    0 0 0 1px rgba(255, 77, 157, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(255, 77, 157, 0.12);
+}
+
+@utility neon-card-turquoise {
+  background: var(--surface-card);
+  border: 1px solid rgba(45, 224, 199, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 18px rgba(45, 224, 199, 0.15);
+}
+
+@utility neon-card-yellow {
+  background: var(--surface-card);
+  border: 1px solid rgba(245, 230, 99, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 18px rgba(245, 230, 99, 0.12);
 }
 
 @utility neon-glow-pink {
-  box-shadow: 0 0 12px rgba(240, 79, 110, 0.6), 0 0 24px rgba(240, 79, 110, 0.3);
+  box-shadow: 0 0 14px rgba(255, 77, 157, 0.55), 0 0 28px rgba(255, 138, 61, 0.25);
 }
 
 @utility neon-glow-orange {
-  box-shadow: 0 0 12px rgba(244, 162, 60, 0.6), 0 0 24px rgba(244, 162, 60, 0.3);
+  box-shadow: 0 0 14px rgba(245, 230, 99, 0.5), 0 0 28px rgba(245, 230, 99, 0.2);
 }
 
 @utility text-neon-pink {
-  color: var(--neon-pink);
-  text-shadow: 0 0 8px rgba(240, 79, 110, 0.6);
+  color: #FF4D9D;
+  text-shadow: 0 0 10px rgba(255, 77, 157, 0.55);
 }
 
 @utility text-neon-orange {
-  color: var(--neon-orange);
-  text-shadow: 0 0 8px rgba(244, 162, 60, 0.6);
+  color: #F5E663;
+  text-shadow: 0 0 10px rgba(245, 230, 99, 0.45);
 }
+
+@utility text-neon-turquoise {
+  color: #2DE0C7;
+  text-shadow: 0 0 10px rgba(45, 224, 199, 0.5);
+}
+
