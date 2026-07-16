@@ -84,26 +84,8 @@ function formatIDR(n: number | string | null | undefined): string {
   }).format(num);
 }
 
-async function fetchTicker(pair: PairKey): Promise<Ticker> {
-  const res = await fetch(`https://indodax.com/api/ticker/${pair}`);
-  if (!res.ok) throw new Error(`Ticker HTTP ${res.status}`);
-  const json = await res.json();
-  const t = json?.ticker;
-  if (!t) throw new Error("Ticker response invalid");
-  return t as Ticker;
-}
 
-async function fetchCandles(pair: PairKey): Promise<number[]> {
-  const now = Math.floor(Date.now() / 1000);
-  const from = now - 60 * 60 * 24 * 30;
-  const symbol = pair.toUpperCase();
-  const url = `https://indodax.com/tradingview/history?symbol=${symbol}&resolution=1D&from=${from}&to=${now}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Candles HTTP ${res.status}`);
-  const json = await res.json();
-  if (!json?.c || !Array.isArray(json.c)) throw new Error("Candles response invalid");
-  return (json.c as number[]).map((n) => Number(n)).filter((n) => Number.isFinite(n));
-}
+
 
 function recoStyle(reco: string): { bg: string; text: string; label: string } {
 
