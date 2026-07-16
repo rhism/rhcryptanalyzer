@@ -246,7 +246,7 @@ function Index() {
         )}
 
         {ticker && !loading && (
-          <section className="neon-card mb-6 rounded-2xl p-5 sm:p-7">
+          <section className="neon-card-violet mb-6 rounded-2xl p-5 sm:p-7">
             <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-neon-orange">
               Market snapshot — {pair.toUpperCase()}
             </h2>
