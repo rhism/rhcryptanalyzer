@@ -129,7 +129,7 @@ function Index() {
   const [analysis, setAnalysis] = useState<GeminiAnalysis | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+  const analyze = useServerFn(analyzeWithGemini);
 
   const run = useCallback(async () => {
     setLoading(true);
@@ -138,11 +138,6 @@ function Index() {
     setTicker(null);
     setIndicators(null);
     try {
-      if (!apiKey) {
-        throw new Error(
-          "VITE_GEMINI_API_KEY belum di-set. Tambahkan di file .env lalu restart dev server.",
-        );
-      }
       setStage("Fetching ticker Indodax…");
       let t: Ticker;
       let closes: number[];
@@ -164,8 +159,14 @@ function Index() {
       setIndicators(ind);
 
       setStage("Meminta analisis Gemini…");
-      const a = await askGemini(pair, t, ind, apiKey);
-      setAnalysis(a);
+      const a = await analyze({
+        data: {
+          pair,
+          ticker: { last: t.last, high: t.high, low: t.low, buy: t.buy, sell: t.sell },
+          indicators: { rsi14: ind.rsi14, ma7: ind.ma7, ma25: ind.ma25 },
+        },
+      });
+      setAnalysis(a as GeminiAnalysis);
       setUpdatedAt(new Date());
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -173,7 +174,8 @@ function Index() {
       setLoading(false);
       setStage("");
     }
-  }, [pair, apiKey]);
+  }, [pair, analyze]);
+
 
   useEffect(() => {
     run();
