@@ -25,8 +25,8 @@ export const analyzeWithGemini = createServerFn({ method: "POST" })
     return input;
   })
   .handler(async ({ data }) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY belum di-set di server secrets.");
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("LOVABLE_API_KEY belum tersedia.");
 
     const { pair, ticker, indicators: ind } = data;
     const prompt = `Kamu adalah analis kripto. Analisis data berikut untuk pasangan ${pair.toUpperCase()} di Indodax dan HANYA balas dengan JSON valid tanpa markdown code fence atau teks lain.
@@ -46,25 +46,34 @@ Indikator (dihitung dari 30 candle harian):
 Balas dengan JSON persis struktur ini (tanpa tambahan apapun):
 {"kesimpulan":"...","rekomendasi":"BUY|HOLD|SELL","alasan":"minimal 3 kalimat","support":"level harga support kasar dalam Rupiah","resistance":"level harga resistance kasar dalam Rupiah","confidence":"LOW|MEDIUM|HIGH"}`;
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0.4 },
-        }),
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
       },
-    );
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.4,
+        response_format: { type: "json_object" },
+      }),
+    });
 
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
-      throw new Error(`Gemini HTTP ${res.status}: ${txt.slice(0, 200)}`);
+      if (res.status === 429) {
+        throw new Error("Rate limit AI Gateway. Coba lagi sebentar.");
+      }
+      if (res.status === 402) {
+        throw new Error("Kredit AI Gateway habis. Tambah kredit di workspace settings.");
+      }
+      throw new Error(`AI Gateway HTTP ${res.status}: ${txt.slice(0, 200)}`);
     }
     const json = await res.json();
-    const text: string | undefined = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error("Gemini: empty response");
+    const text: string | undefined = json?.choices?.[0]?.message?.content;
+    if (!text) throw new Error("AI Gateway: empty response");
+
     const cleaned = text
       .trim()
       .replace(/^```json\s*/i, "")
