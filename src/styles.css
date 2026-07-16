@@ -100,6 +100,21 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 18px rgba(245, 230, 99, 0.12);
 }
 
+@utility neon-card-violet {
+  background: var(--surface-card);
+  border: 1px solid rgba(139, 61, 255, 0.45);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(139, 61, 255, 0.2);
+}
+
+@utility neon-glow-violet {
+  box-shadow: 0 0 14px rgba(139, 61, 255, 0.6), 0 0 28px rgba(124, 42, 232, 0.3);
+}
+
+@utility text-neon-violet {
+  color: #B084FF;
+  text-shadow: 0 0 10px rgba(139, 61, 255, 0.55);
+}
+
 @utility neon-glow-pink {
   box-shadow: 0 0 14px rgba(255, 77, 157, 0.55), 0 0 28px rgba(255, 138, 61, 0.25);
 }
