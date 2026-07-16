@@ -3,12 +3,32 @@ import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useState } from "react";
 import { analyzeWithGemini } from "@/lib/gemini.functions";
 import { fetchIndodaxTicker, fetchIndodaxCandles } from "@/lib/indodax.functions";
+import { LockScreen } from "@/components/LockScreen";
 
 
 
 export const Route = createFileRoute("/")({
-  component: Index,
+  component: Gate,
+  ssr: false,
 });
+
+const STORAGE_KEY = "app_unlocked_v1";
+
+function Gate() {
+  const [unlocked, setUnlocked] = useState(false);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(STORAGE_KEY) === "1") setUnlocked(true);
+    } catch {
+      // ignore
+    }
+    setReady(true);
+  }, []);
+  if (!ready) return null;
+  if (!unlocked) return <LockScreen onUnlock={() => setUnlocked(true)} />;
+  return <Index />;
+}
 
 type PairKey = "bnbidr" | "btcidr" | "ethidr" | "solidr";
 
