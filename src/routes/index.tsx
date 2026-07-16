@@ -246,7 +246,7 @@ function Index() {
         )}
 
         {ticker && !loading && (
-          <section className="neon-card mb-6 rounded-2xl p-5 sm:p-7">
+          <section className="neon-card-violet mb-6 rounded-2xl p-5 sm:p-7">
             <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-neon-orange">
               Market snapshot — {pair.toUpperCase()}
             </h2>
@@ -281,7 +281,7 @@ function Index() {
               )}
             </div>
 
-            <div className="mb-5 rounded-lg border border-[color:var(--neon-magenta)]/40 bg-black/30 p-4">
+            <div className="mb-5 rounded-lg border border-[color:var(--neon-violet)]/50 bg-[color:var(--neon-violet)]/10 p-4">
               <p className="mb-1 text-xs uppercase tracking-widest text-neon-orange">Kesimpulan</p>
               <p className="text-base font-medium text-white">{analysis.kesimpulan}</p>
             </div>
