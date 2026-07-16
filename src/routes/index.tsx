@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useState } from "react";
 import { analyzeWithGemini } from "@/lib/gemini.functions";
 import { fetchIndodaxTicker, fetchIndodaxCandles } from "@/lib/indodax.functions";
+import { LockScreen } from "@/components/LockScreen";
 
 
 
