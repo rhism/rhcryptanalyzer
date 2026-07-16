@@ -162,7 +162,7 @@ function Index() {
       setLoading(false);
       setStage("");
     }
-  }, [pair, analyze]);
+  }, [pair, analyze, getTicker, getCandles]);
 
 
   useEffect(() => {
