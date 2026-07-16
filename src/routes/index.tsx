@@ -113,6 +113,8 @@ function Index() {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   const analyze = useServerFn(analyzeWithGemini);
+  const getTicker = useServerFn(fetchIndodaxTicker);
+  const getCandles = useServerFn(fetchIndodaxCandles);
 
   const run = useCallback(async () => {
     setLoading(true);
@@ -125,12 +127,15 @@ function Index() {
       let t: Ticker;
       let closes: number[];
       try {
-        [t, closes] = await Promise.all([fetchTicker(pair), fetchCandles(pair)]);
+        const now = Math.floor(Date.now() / 1000);
+        const from = now - 60 * 60 * 24 * 30;
+        [t, closes] = await Promise.all([
+          getTicker({ data: { pair } }) as Promise<Ticker>,
+          getCandles({ data: { pair, from, to: now } }) as Promise<number[]>,
+        ]);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        throw new Error(
-          `Gagal ambil data, kemungkinan CORS diblokir Indodax. Perlu proxy server. (${msg})`,
-        );
+        throw new Error(`Gagal ambil data Indodax lewat proxy server. (${msg})`);
       }
       setTicker(t);
       const ind: Indicators = {
