@@ -9,15 +9,28 @@ export type IndodaxTicker = {
   sell?: string;
 };
 
+// Accept either "bnbidr" or "bnb_idr". Normalize to "bnb_idr" (official docs format).
+function normalizePair(pair: string): { underscore: string; upper: string } {
+  if (!pair || !/^[a-z0-9_]+$/i.test(pair)) throw new Error("Invalid pair");
+  const lower = pair.toLowerCase();
+  const underscore = lower.includes("_")
+    ? lower
+    : lower.endsWith("idr")
+      ? `${lower.slice(0, -3)}_idr`
+      : lower.endsWith("usdt")
+        ? `${lower.slice(0, -4)}_usdt`
+        : lower;
+  const upper = underscore.replace("_", "").toUpperCase();
+  return { underscore, upper };
+}
+
 export const fetchIndodaxTicker = createServerFn({ method: "POST" })
-  .inputValidator((input: { pair: string }) => {
-    if (!input?.pair || !/^[a-z0-9]+$/i.test(input.pair)) {
-      throw new Error("Invalid pair");
-    }
-    return { pair: input.pair.toLowerCase() };
-  })
+  .inputValidator((input: { pair: string }) => ({ pair: input.pair }))
   .handler(async ({ data }) => {
-    const res = await fetch(`https://indodax.com/api/ticker/${data.pair}`);
+    const { underscore } = normalizePair(data.pair);
+    // Official docs: https://indodax.com/api/{pair_id}/ticker  (pair_id uses underscore)
+    const url = `https://indodax.com/api/${underscore}/ticker`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`Indodax ticker HTTP ${res.status}`);
     const json = await res.json();
     const t = json?.ticker;
@@ -27,22 +40,34 @@ export const fetchIndodaxTicker = createServerFn({ method: "POST" })
 
 export const fetchIndodaxCandles = createServerFn({ method: "POST" })
   .inputValidator((input: { pair: string; from: number; to: number }) => {
-    if (!input?.pair || !/^[a-z0-9]+$/i.test(input.pair)) {
-      throw new Error("Invalid pair");
-    }
     if (!Number.isFinite(input.from) || !Number.isFinite(input.to)) {
       throw new Error("Invalid range");
     }
-    return { pair: input.pair.toLowerCase(), from: input.from, to: input.to };
+    return { pair: input.pair, from: input.from, to: input.to };
   })
   .handler(async ({ data }) => {
-    const symbol = data.pair.toUpperCase();
-    const url = `https://indodax.com/tradingview/history?symbol=${symbol}&resolution=1D&from=${data.from}&to=${data.to}`;
+    const { upper } = normalizePair(data.pair);
+    // Unofficial TradingView-style endpoint. Correct form (probed): history_v2 with `tf`
+    // (not `resolution`). Valid tf values include 1,5,15,30,60,240,1D.
+    const url = `https://indodax.com/tradingview/history_v2?symbol=${upper}&tf=1D&from=${data.from}&to=${data.to}`;
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`Indodax candles HTTP ${res.status}`);
-    const json = await res.json();
-    if (!json?.c || !Array.isArray(json.c)) throw new Error("Indodax candles response invalid");
-    return (json.c as unknown[])
-      .map((n) => Number(n))
-      .filter((n) => Number.isFinite(n)) as number[];
+    const text = await res.text();
+    if (!res.ok) {
+      console.error("[indodax candles] HTTP", res.status, "url:", url, "body:", text.slice(0, 500));
+      throw new Error(`Indodax candles HTTP ${res.status}: ${text.slice(0, 200)}`);
+    }
+    let json: unknown;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      console.error("[indodax candles] non-JSON response. url:", url, "body:", text.slice(0, 500));
+      throw new Error(`Indodax candles non-JSON response: ${text.slice(0, 200)}`);
+    }
+    if (!Array.isArray(json)) {
+      console.error("[indodax candles] unexpected shape. url:", url, "body:", text.slice(0, 500));
+      throw new Error("Indodax candles response invalid");
+    }
+    return (json as Array<{ Close: number | string }>)
+      .map((c) => Number(c?.Close))
+      .filter((n) => Number.isFinite(n));
   });
