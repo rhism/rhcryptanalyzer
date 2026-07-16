@@ -281,7 +281,7 @@ function Index() {
               )}
             </div>
 
-            <div className="mb-5 rounded-lg border border-[color:var(--neon-magenta)]/40 bg-black/30 p-4">
+            <div className="mb-5 rounded-lg border border-[color:var(--neon-violet)]/50 bg-[color:var(--neon-violet)]/10 p-4">
               <p className="mb-1 text-xs uppercase tracking-widest text-neon-orange">Kesimpulan</p>
               <p className="text-base font-medium text-white">{analysis.kesimpulan}</p>
             </div>
