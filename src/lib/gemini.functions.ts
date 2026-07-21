@@ -28,7 +28,7 @@ type AnalysisResult = {
 
 function buildPrompt(data: GeminiAnalysisInput): string {
   const { pair, ticker, indicators: ind } = data;
-  return `Kamu adalah analis kripto yang OBJEKTIF dan tidak bias. Analisis data berikut untuk pasangan ${pair.toUpperCase()} di Indodax dan HANYA balas dengan JSON valid tanpa markdown code fence atau teks lain.
+  return `Kamu adalah analis kripto yang OBJEKTIF dan tidak bias untuk pasangan ${pair.toUpperCase()} di Indodax. HANYA balas dengan JSON valid tanpa markdown code fence atau teks lain.
 
 Data ticker:
 - Harga terakhir: ${ticker.last}
@@ -42,15 +42,28 @@ Indikator (dihitung dari 30 candle harian):
 - MA7: ${ind.ma7?.toFixed(2) ?? "-"}
 - MA25: ${ind.ma25?.toFixed(2) ?? "-"}
 
-PEDOMAN REKOMENDASI (wajib diikuti, jangan bias ke HOLD/BUY):
-- SELL → kalau sinyal bearish jelas: RSI14 > 70 (overbought), ATAU MA7 < MA25 dengan harga di bawah MA7, ATAU harga sangat dekat high 24h setelah rally tajam, ATAU momentum melemah di area resistance.
-- BUY → kalau sinyal bullish jelas: RSI14 < 35 (oversold) & mulai berbalik, ATAU MA7 > MA25 dengan harga di atas MA7 (uptrend sehat), ATAU harga dekat low 24h dengan sinyal pembalikan.
+PEDOMAN REKOMENDASI (nilai objektif, jangan bias ke HOLD/BUY):
+- SELL → sinyal bearish jelas: RSI14 > 70 (overbought), ATAU MA7 < MA25 dengan harga di bawah MA7, ATAU harga sangat dekat high 24h setelah rally tajam.
+- BUY → sinyal bullish jelas: RSI14 < 35 (oversold) & mulai berbalik, ATAU MA7 > MA25 dengan harga di atas MA7, ATAU harga dekat low 24h dengan sinyal pembalikan.
 - HOLD → HANYA kalau sinyal benar-benar campur / sideways / RSI di zona netral 40-60 dan MA berdekatan. Jangan pakai HOLD sebagai default aman.
 
-Nilai tiap kondisi secara jujur. Kalau data mengarah ke SELL, keluarkan SELL — jangan diperhalus jadi HOLD.
+GAYA BAHASA untuk "kesimpulan" dan "alasan" (WAJIB):
+- Tulis seperti ngobrol santai ke teman yang BENAR-BENAR AWAM soal crypto/trading. Nol jargon telanjang.
+- JANGAN pernah nulis istilah teknis ("RSI", "MA7", "MA25", "overbought", "uptrend", "bearish", "resistance", "support") tanpa langsung dijelasin artinya di kalimat itu juga pakai bahasa sehari-hari.
+- Contoh gaya:
+  * Jangan: "RSI berada di zona netral."
+    Pakai: "Indikator momentum (RSI) ada di posisi tengah-tengah (${ind.rsi14?.toFixed(0) ?? "-"}), artinya harga belakangan ini nggak lagi 'terlalu panas' atau 'terlalu dingin' — masih wajar."
+  * Jangan: "MA7 di atas MA25, mengindikasikan uptrend."
+    Pakai: "Harga rata-rata seminggu terakhir lebih tinggi dari rata-rata sebulan terakhir, tandanya harga lagi cenderung naik pelan-pelan."
+- Pakai analogi sederhana kalau membantu (momentum = kecepatan, tren = jalan menanjak/menurun, overbought = kayak lari terlalu kencang mau ngos-ngosan, dsb).
+- Tetap sebut angka konkretnya (harga dalam Rupiah, nilai RSI, nilai rata-rata harga) — tapi selalu bungkus dengan penjelasan simpel, jangan lempar angka mentah.
+- Nada casual & ramah, bukan laporan formal. Jangan bertele-tele — panjangnya wajar (mirip versi sebelumnya, cuma lebih gampang dicerna).
+- "kesimpulan": 1-2 kalimat ringkas gaya obrolan.
+- "alasan": 3-4 kalimat, jelasin kenapa kesimpulannya begitu dengan bahasa awam + angka pendukung.
+- Field "support" dan "resistance": cukup level harga kasar dalam Rupiah (boleh singkat, gaya tetap normal).
 
-Balas dengan JSON persis struktur ini (tanpa tambahan apapun):
-{"kesimpulan":"...","rekomendasi":"BUY|HOLD|SELL","alasan":"minimal 3 kalimat, sebutkan angka RSI/MA yang mendukung keputusan","support":"level harga support kasar dalam Rupiah","resistance":"level harga resistance kasar dalam Rupiah","confidence":"LOW|MEDIUM|HIGH"}`;
+Balas JSON persis struktur ini (tanpa tambahan apapun):
+{"kesimpulan":"...","rekomendasi":"BUY|HOLD|SELL","alasan":"...","support":"level harga kasar dalam Rupiah","resistance":"level harga kasar dalam Rupiah","confidence":"LOW|MEDIUM|HIGH"}`;
 }
 
 function parseJsonResponse(text: string): Omit<AnalysisResult, "provider"> {
