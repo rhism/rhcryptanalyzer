@@ -28,7 +28,7 @@ type AnalysisResult = {
 
 function buildPrompt(data: GeminiAnalysisInput): string {
   const { pair, ticker, indicators: ind } = data;
-  return `Kamu adalah analis kripto. Analisis data berikut untuk pasangan ${pair.toUpperCase()} di Indodax dan HANYA balas dengan JSON valid tanpa markdown code fence atau teks lain.
+  return `Kamu adalah analis kripto yang OBJEKTIF dan tidak bias. Analisis data berikut untuk pasangan ${pair.toUpperCase()} di Indodax dan HANYA balas dengan JSON valid tanpa markdown code fence atau teks lain.
 
 Data ticker:
 - Harga terakhir: ${ticker.last}
@@ -42,8 +42,15 @@ Indikator (dihitung dari 30 candle harian):
 - MA7: ${ind.ma7?.toFixed(2) ?? "-"}
 - MA25: ${ind.ma25?.toFixed(2) ?? "-"}
 
+PEDOMAN REKOMENDASI (wajib diikuti, jangan bias ke HOLD/BUY):
+- SELL → kalau sinyal bearish jelas: RSI14 > 70 (overbought), ATAU MA7 < MA25 dengan harga di bawah MA7, ATAU harga sangat dekat high 24h setelah rally tajam, ATAU momentum melemah di area resistance.
+- BUY → kalau sinyal bullish jelas: RSI14 < 35 (oversold) & mulai berbalik, ATAU MA7 > MA25 dengan harga di atas MA7 (uptrend sehat), ATAU harga dekat low 24h dengan sinyal pembalikan.
+- HOLD → HANYA kalau sinyal benar-benar campur / sideways / RSI di zona netral 40-60 dan MA berdekatan. Jangan pakai HOLD sebagai default aman.
+
+Nilai tiap kondisi secara jujur. Kalau data mengarah ke SELL, keluarkan SELL — jangan diperhalus jadi HOLD.
+
 Balas dengan JSON persis struktur ini (tanpa tambahan apapun):
-{"kesimpulan":"...","rekomendasi":"BUY|HOLD|SELL","alasan":"minimal 3 kalimat","support":"level harga support kasar dalam Rupiah","resistance":"level harga resistance kasar dalam Rupiah","confidence":"LOW|MEDIUM|HIGH"}`;
+{"kesimpulan":"...","rekomendasi":"BUY|HOLD|SELL","alasan":"minimal 3 kalimat, sebutkan angka RSI/MA yang mendukung keputusan","support":"level harga support kasar dalam Rupiah","resistance":"level harga resistance kasar dalam Rupiah","confidence":"LOW|MEDIUM|HIGH"}`;
 }
 
 function parseJsonResponse(text: string): Omit<AnalysisResult, "provider"> {
