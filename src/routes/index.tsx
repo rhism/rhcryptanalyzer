@@ -30,13 +30,14 @@ function Gate() {
   return <Index />;
 }
 
-type PairKey = "bnbidr" | "btcidr" | "ethidr" | "solidr";
+type PairKey = "bnbidr" | "btcidr" | "ethidr" | "solidr" | "xrpidr";
 
 const PAIRS: { value: PairKey; label: string }[] = [
   { value: "bnbidr", label: "BNB / IDR" },
   { value: "btcidr", label: "BTC / IDR" },
   { value: "ethidr", label: "ETH / IDR" },
   { value: "solidr", label: "SOL / IDR" },
+  { value: "xrpidr", label: "XRP / IDR" },
 ];
 
 type Ticker = {
