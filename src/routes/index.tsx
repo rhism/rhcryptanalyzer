@@ -203,10 +203,12 @@ function Index() {
   }, [pair, strategy, analyze, getTicker, getCandles]);
 
 
-  useEffect(() => {
-    run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pair, strategy]);
+  const [hasRun, setHasRun] = useState(false);
+
+  const handleRun = useCallback(() => {
+    setHasRun(true);
+    void run();
+  }, [run]);
 
   const reco = analysis ? recoStyle(analysis.rekomendasi) : null;
 
@@ -239,7 +241,7 @@ function Index() {
               ))}
             </select>
             <button
-              onClick={run}
+              onClick={handleRun}
               disabled={loading}
               className="neon-glow-pink rounded-md border border-[color:var(--neon-pink)] bg-gradient-to-r from-[#FF4D9D] to-[#FF8A3D] px-5 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-auto"
             >
@@ -275,6 +277,20 @@ function Index() {
             </p>
           </div>
         </header>
+
+        {!hasRun && !loading && (
+          <div className="neon-card-violet rounded-2xl p-10 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-[color:var(--neon-violet)]/60 bg-black/40 text-2xl">
+              📊
+            </div>
+            <p className="text-sm font-medium text-white/80">
+              Pilih pair dan strategi, lalu klik “Refresh Analysis” untuk memulai
+            </p>
+            <p className="mt-2 text-xs text-white/50">
+              Tidak ada data yang diambil sebelum kamu klik tombolnya.
+            </p>
+          </div>
+        )}
 
         {loading && (
           <div className="neon-card mb-6 rounded-xl p-6 text-center">
