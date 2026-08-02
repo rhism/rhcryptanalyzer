@@ -75,8 +75,8 @@ GAYA BAHASA untuk "kesimpulan" dan "alasan" (WAJIB):
 - Pakai analogi sederhana kalau membantu (momentum = kecepatan, tren = jalan menanjak/menurun, overbought = kayak lari terlalu kencang mau ngos-ngosan, dsb).
 - Tetap sebut angka konkretnya (harga dalam Rupiah, nilai RSI, nilai rata-rata harga) — tapi selalu bungkus dengan penjelasan simpel, jangan lempar angka mentah.
 - Nada casual & ramah, bukan laporan formal. Jangan bertele-tele — panjangnya wajar (mirip versi sebelumnya, cuma lebih gampang dicerna).
-- "kesimpulan": 1-2 kalimat ringkas gaya obrolan.
-- "alasan": 3-4 kalimat, jelasin kenapa kesimpulannya begitu dengan bahasa awam + angka pendukung.
+- "kesimpulan": 1-2 kalimat ringkas gaya obrolan, DITUTUP satu kalimat yang bilang bahwa ini cuma satu sudut pandang analisis dari beberapa cara yang sama-sama valid, dan kalau tombol strateginya diganti, hasil bacanya bisa beda tapi tetap masuk akal.
+- "alasan": 3-4 kalimat, WAJIB dimulai dengan "Berdasarkan pendekatan ${strategyLabel}, ..." lalu jelasin kenapa kesimpulannya begitu dengan bahasa awam + angka pendukung.
 - Field "support" dan "resistance": cukup level harga kasar dalam Rupiah (boleh singkat, gaya tetap normal).
 
 Balas JSON persis struktur ini (tanpa tambahan apapun):
