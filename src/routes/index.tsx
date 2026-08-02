@@ -247,6 +247,33 @@ function Index() {
 
             </button>
           </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-xs uppercase tracking-widest text-neon-orange">
+              Strategi Analisis
+            </label>
+            <div className="inline-flex w-full max-w-md rounded-lg border border-[color:var(--neon-violet)]/60 bg-black/30 p-1 sm:w-auto">
+              {STRATEGIES.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => setStrategy(s.value)}
+                  disabled={loading}
+                  aria-pressed={strategy === s.value}
+                  className={`flex-1 rounded-md px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    strategy === s.value
+                      ? "bg-gradient-to-r from-[#FF4D9D] to-[#FF8A3D] text-white"
+                      : "text-white/70 hover:text-white"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-white/60">
+              {STRATEGIES.find((s) => s.value === strategy)?.desc}
+            </p>
+          </div>
         </header>
 
         {loading && (
