@@ -123,8 +123,24 @@ function confidenceStyle(c: string): string {
   return "bg-yellow-500/20 text-yellow-200 border-yellow-400/50";
 }
 
+type StrategyKey = "trend" | "contrarian";
+
+const STRATEGIES: { value: StrategyKey; label: string; desc: string }[] = [
+  {
+    value: "trend",
+    label: "Trend Following",
+    desc: "Ikuti arah tren — beli saat momentum naik, jual saat momentum melemah.",
+  },
+  {
+    value: "contrarian",
+    label: "Contrarian",
+    desc: "Lawan arah tren — cari peluang beli saat harga jenuh turun, jual saat harga jenuh naik.",
+  },
+];
+
 function Index() {
   const [pair, setPair] = useState<PairKey>("bnbidr");
+  const [strategy, setStrategy] = useState<StrategyKey>("trend");
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
