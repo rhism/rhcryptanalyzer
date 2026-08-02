@@ -123,8 +123,24 @@ function confidenceStyle(c: string): string {
   return "bg-yellow-500/20 text-yellow-200 border-yellow-400/50";
 }
 
+type StrategyKey = "trend" | "contrarian";
+
+const STRATEGIES: { value: StrategyKey; label: string; desc: string }[] = [
+  {
+    value: "trend",
+    label: "Trend Following",
+    desc: "Ikuti arah tren — beli saat momentum naik, jual saat momentum melemah.",
+  },
+  {
+    value: "contrarian",
+    label: "Contrarian",
+    desc: "Lawan arah tren — cari peluang beli saat harga jenuh turun, jual saat harga jenuh naik.",
+  },
+];
+
 function Index() {
   const [pair, setPair] = useState<PairKey>("bnbidr");
+  const [strategy, setStrategy] = useState<StrategyKey>("trend");
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -171,6 +187,7 @@ function Index() {
       const a = await analyze({
         data: {
           pair,
+          strategy,
           ticker: { last: t.last, high: t.high, low: t.low, buy: t.buy, sell: t.sell },
           indicators: { rsi14: ind.rsi14, ma7: ind.ma7, ma25: ind.ma25 },
         },
@@ -183,13 +200,13 @@ function Index() {
       setLoading(false);
       setStage("");
     }
-  }, [pair, analyze, getTicker, getCandles]);
+  }, [pair, strategy, analyze, getTicker, getCandles]);
 
 
   useEffect(() => {
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pair]);
+  }, [pair, strategy]);
 
   const reco = analysis ? recoStyle(analysis.rekomendasi) : null;
 
@@ -229,6 +246,33 @@ function Index() {
               {loading ? "Loading…" : "Refresh Analysis"}
 
             </button>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-xs uppercase tracking-widest text-neon-orange">
+              Strategi Analisis
+            </label>
+            <div className="inline-flex w-full max-w-md rounded-lg border border-[color:var(--neon-violet)]/60 bg-black/30 p-1 sm:w-auto">
+              {STRATEGIES.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => setStrategy(s.value)}
+                  disabled={loading}
+                  aria-pressed={strategy === s.value}
+                  className={`flex-1 rounded-md px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    strategy === s.value
+                      ? "bg-gradient-to-r from-[#FF4D9D] to-[#FF8A3D] text-white"
+                      : "text-white/70 hover:text-white"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-white/60">
+              {STRATEGIES.find((s) => s.value === strategy)?.desc}
+            </p>
           </div>
         </header>
 
