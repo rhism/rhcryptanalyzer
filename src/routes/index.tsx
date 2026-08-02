@@ -278,6 +278,20 @@ function Index() {
           </div>
         </header>
 
+        {!hasRun && !loading && (
+          <div className="neon-card-violet rounded-2xl p-10 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-[color:var(--neon-violet)]/60 bg-black/40 text-2xl">
+              📊
+            </div>
+            <p className="text-sm font-medium text-white/80">
+              Pilih pair dan strategi, lalu klik “Refresh Analysis” untuk memulai
+            </p>
+            <p className="mt-2 text-xs text-white/50">
+              Tidak ada data yang diambil sebelum kamu klik tombolnya.
+            </p>
+          </div>
+        )}
+
         {loading && (
           <div className="neon-card mb-6 rounded-xl p-6 text-center">
             <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[color:var(--neon-pink)] border-t-transparent" />
