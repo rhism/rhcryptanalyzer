@@ -203,10 +203,12 @@ function Index() {
   }, [pair, strategy, analyze, getTicker, getCandles]);
 
 
-  useEffect(() => {
-    run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pair, strategy]);
+  const [hasRun, setHasRun] = useState(false);
+
+  const handleRun = useCallback(() => {
+    setHasRun(true);
+    void run();
+  }, [run]);
 
   const reco = analysis ? recoStyle(analysis.rekomendasi) : null;
 
