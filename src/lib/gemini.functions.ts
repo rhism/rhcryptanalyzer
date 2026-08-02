@@ -1,7 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 
+export type Strategy = "trend" | "contrarian";
+
 export type GeminiAnalysisInput = {
   pair: string;
+  strategy?: Strategy;
   ticker: {
     last: string;
     high: string;
