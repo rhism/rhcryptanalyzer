@@ -31,7 +31,11 @@ type AnalysisResult = {
 
 function buildPrompt(data: GeminiAnalysisInput): string {
   const { pair, ticker, indicators: ind } = data;
+  const strategy: Strategy = data.strategy === "contrarian" ? "contrarian" : "trend";
+  const strategyLabel = strategy === "contrarian" ? "Contrarian" : "Trend Following";
   return `Kamu adalah analis kripto yang OBJEKTIF dan tidak bias untuk pasangan ${pair.toUpperCase()} di Indodax. HANYA balas dengan JSON valid tanpa markdown code fence atau teks lain.
+
+STRATEGI YANG DIPILIH USER: ${strategyLabel}
 
 Data ticker:
 - Harga terakhir: ${ticker.last}
