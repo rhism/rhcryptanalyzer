@@ -187,6 +187,7 @@ function Index() {
       const a = await analyze({
         data: {
           pair,
+          strategy,
           ticker: { last: t.last, high: t.high, low: t.low, buy: t.buy, sell: t.sell },
           indicators: { rsi14: ind.rsi14, ma7: ind.ma7, ma25: ind.ma25 },
         },
@@ -199,13 +200,13 @@ function Index() {
       setLoading(false);
       setStage("");
     }
-  }, [pair, analyze, getTicker, getCandles]);
+  }, [pair, strategy, analyze, getTicker, getCandles]);
 
 
   useEffect(() => {
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pair]);
+  }, [pair, strategy]);
 
   const reco = analysis ? recoStyle(analysis.rekomendasi) : null;
 
