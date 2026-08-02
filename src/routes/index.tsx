@@ -241,7 +241,7 @@ function Index() {
               ))}
             </select>
             <button
-              onClick={run}
+              onClick={handleRun}
               disabled={loading}
               className="neon-glow-pink rounded-md border border-[color:var(--neon-pink)] bg-gradient-to-r from-[#FF4D9D] to-[#FF8A3D] px-5 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-auto"
             >
