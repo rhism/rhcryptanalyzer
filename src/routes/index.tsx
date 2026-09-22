@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { analyzeWithGemini } from "@/lib/gemini.functions";
 import { fetchIndodaxTicker, fetchIndodaxCandles } from "@/lib/indodax.functions";
 import { LockScreen } from "@/components/LockScreen";
+import { MarketSummary } from "@/components/MarketSummary";
 
 
 
