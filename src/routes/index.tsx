@@ -215,17 +215,44 @@ function Index() {
   return (
     <div className="min-h-screen px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto max-w-4xl">
-        <header className="mb-8 flex flex-col gap-4 sm:mb-10">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight sm:text-5xl">
-              <span className="text-neon-pink">Kripto</span>{" "}
-              <span className="text-neon-orange">Analyzer</span>
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-              Indodax ticker + RSI/MA hitung sendiri + rekomendasi Gemini. Read-only, no backend.
-            </p>
-          </div>
+        <div className="mb-6">
+          <h1 className="text-3xl font-extrabold tracking-tight sm:text-5xl">
+            <span className="text-neon-pink">Kripto</span>{" "}
+            <span className="text-neon-orange">Analyzer</span>
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+            Indodax ticker + RSI/MA hitung sendiri + rekomendasi Gemini. Read-only, no backend.
+          </p>
+        </div>
 
+        <div className="mb-8 inline-flex w-full max-w-md rounded-lg border border-[color:var(--neon-violet)]/60 bg-black/30 p-1 sm:w-auto">
+          {(
+            [
+              { value: "analisis", label: "Analisis Koin" },
+              { value: "pasar", label: "Ringkasan Pasar" },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => setTab(t.value)}
+              aria-pressed={tab === t.value}
+              className={`flex-1 rounded-md px-4 py-2 text-sm font-semibold transition ${
+                tab === t.value
+                  ? "bg-gradient-to-r from-[#FF4D9D] to-[#FF8A3D] text-white"
+                  : "text-white/70 hover:text-white"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "pasar" ? (
+          <MarketSummary />
+        ) : (
+        <>
+        <header className="mb-8 flex flex-col gap-4 sm:mb-10">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <label className="text-xs uppercase tracking-widest text-neon-orange">Pair</label>
             <select
