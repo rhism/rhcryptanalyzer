@@ -395,6 +395,8 @@ function Index() {
             </div>
           </section>
         )}
+        </>
+        )}
 
         <footer className="mt-10 text-center text-xs text-white/50">
           Personal tools · Data: Indodax public API · AI: Gemini 2.5 Flash · Bukan saran finansial.
