@@ -32,8 +32,9 @@ export const fetchFearGreed = createServerFn({ method: "GET" }).handler(
 
 export const fetchUsdIdr = createServerFn({ method: "GET" }).handler(
   async (): Promise<UsdIdr> => {
-    const res = await fetch("https://api.frankfurter.app/latest?from=USD&to=IDR", {
+    const res = await fetch("https://api.frankfurter.dev/v1/latest?from=USD&to=IDR", {
       headers: { Accept: "application/json" },
+      redirect: "follow",
     });
     if (!res.ok) throw new Error(`Frankfurter HTTP ${res.status}`);
     const json = await res.json();
