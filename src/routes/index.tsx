@@ -348,6 +348,10 @@ function Index() {
             </div>
           </section>
         )}
+        </>
+        )}
+
+
 
         {analysis && reco && !loading && (
           <section className="neon-card rounded-2xl p-5 sm:p-7">
