@@ -140,6 +140,7 @@ const STRATEGIES: { value: StrategyKey; label: string; desc: string }[] = [
 ];
 
 function Index() {
+  const [tab, setTab] = useState<"analisis" | "pasar">("analisis");
   const [pair, setPair] = useState<PairKey>("bnbidr");
   const [strategy, setStrategy] = useState<StrategyKey>("trend");
   const [loading, setLoading] = useState(false);
