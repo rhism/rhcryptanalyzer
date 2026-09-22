@@ -348,8 +348,6 @@ function Index() {
             </div>
           </section>
         )}
-        </>
-        )}
 
 
 
