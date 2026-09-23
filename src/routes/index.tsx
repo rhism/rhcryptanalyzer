@@ -31,7 +31,7 @@ function Gate() {
   return <Index />;
 }
 
-type PairKey = "bnbidr" | "btcidr" | "ethidr" | "solidr" | "xrpidr";
+type PairKey = "bnbidr" | "btcidr" | "ethidr" | "solidr" | "xrpidr" | "hypeidr" | "dogeidr" | "beatidr" | "audioidr";
 
 const PAIRS: { value: PairKey; label: string }[] = [
   { value: "bnbidr", label: "BNB / IDR" },
@@ -39,6 +39,10 @@ const PAIRS: { value: PairKey; label: string }[] = [
   { value: "ethidr", label: "ETH / IDR" },
   { value: "solidr", label: "SOL / IDR" },
   { value: "xrpidr", label: "XRP / IDR" },
+  { value: "hypeidr", label: "HYPE / IDR" },
+  { value: "dogeidr", label: "DOGE / IDR" },
+  { value: "beatidr", label: "BEAT / IDR" },
+  { value: "audioidr", label: "AUDIO / IDR" },
 ];
 
 type Ticker = {
