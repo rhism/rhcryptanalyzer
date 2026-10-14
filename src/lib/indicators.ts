@@ -309,6 +309,8 @@ export type MarketAnalysis = {
   closedCount: number;
   /** Harga yang dipakai sebagai harga sekarang. */
   price: number | null;
+  /** Jumlah hari tanpa transaksi (volume 0) di 30 candle selesai terakhir. */
+  zeroVolumeDays: number;
   warnings: string[];
 };
 
@@ -346,7 +348,14 @@ export function computeAnalysis(
       ? findLevels(closed, price)
       : { support: null, resistance: null, supportSource: null, resistanceSource: null };
   const plan = price !== null ? buildPlan(price, atr14, levels) : null;
+  const recent30 = closed.slice(-30);
+  const zeroVolumeDays = recent30.filter((c) => c.volume === 0).length;
 
+  if (zeroVolumeDays >= 3) {
+    warnings.push(
+      `${zeroVolumeDays} dari ${recent30.length} hari terakhir tanpa transaksi sama sekali: datanya jarang, indikator kurang bisa dipercaya.`,
+    );
+  }
   if (rsi14 === null) warnings.push("Data kurang untuk RSI 14 (butuh minimal 15 harga).");
   if (ma25 === null) warnings.push("Data kurang untuk MA 25 (butuh minimal 25 harga).");
   if (macdVal === null) warnings.push("Data kurang untuk MACD (butuh minimal 34 harga).");
@@ -373,6 +382,7 @@ export function computeAnalysis(
     candleCount: candles.length,
     closedCount: closed.length,
     price,
+    zeroVolumeDays,
     warnings,
   };
 }

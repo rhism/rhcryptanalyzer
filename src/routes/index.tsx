@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { analyzeWithGemini } from "@/lib/gemini.functions";
-import { fetchIndodaxTicker, fetchIndodaxCandles } from "@/lib/indodax.functions";
+import { fetchIndodaxTicker, fetchIndodaxCandles, fetchIndodaxPairs } from "@/lib/indodax.functions";
 import { LockScreen } from "@/components/LockScreen";
 import { AUTH_TOKEN_KEY } from "@/lib/auth";
 import { computeAnalysis, PARAMS, type Candle, type MarketAnalysis } from "@/lib/indicators";
+import { compactIdr, formatIdr } from "@/lib/format";
+import { FALLBACK_PAIRS, liquidityWarning, type PairInfo } from "@/lib/pairs";
 import { checkSession } from "@/lib/lock.functions";
 import { MarketSummary } from "@/components/MarketSummary";
 
@@ -53,20 +55,6 @@ function Gate() {
   return <Index />;
 }
 
-type PairKey = "bnbidr" | "btcidr" | "ethidr" | "solidr" | "xrpidr" | "hypeidr" | "dogeidr" | "beatidr" | "audioidr";
-
-const PAIRS: { value: PairKey; label: string }[] = [
-  { value: "bnbidr", label: "BNB / IDR" },
-  { value: "btcidr", label: "BTC / IDR" },
-  { value: "ethidr", label: "ETH / IDR" },
-  { value: "solidr", label: "SOL / IDR" },
-  { value: "xrpidr", label: "XRP / IDR" },
-  { value: "hypeidr", label: "HYPE / IDR" },
-  { value: "dogeidr", label: "DOGE / IDR" },
-  { value: "beatidr", label: "BEAT / IDR" },
-  { value: "audioidr", label: "AUDIO / IDR" },
-];
-
 type Ticker = {
   last: string;
   high: string;
@@ -89,11 +77,7 @@ function formatIDR(n: number | string | null | undefined): string {
   if (n === null || n === undefined || n === "") return "-";
   const num = typeof n === "string" ? Number(n) : n;
   if (!Number.isFinite(num)) return String(n);
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(num);
+  return formatIdr(num);
 }
 
 
@@ -135,7 +119,11 @@ const STRATEGIES: { value: StrategyKey; label: string; desc: string }[] = [
 
 function Index() {
   const [tab, setTab] = useState<"analisis" | "pasar">("analisis");
-  const [pair, setPair] = useState<PairKey>("bnbidr");
+  const [pair, setPair] = useState<string>("bnbidr");
+  const [pairs, setPairs] = useState<PairInfo[]>(FALLBACK_PAIRS);
+  const [pairsSource, setPairsSource] = useState<"loading" | "live" | "fallback">("loading");
+  const [pairSearch, setPairSearch] = useState("");
+  const getPairs = useServerFn(fetchIndodaxPairs);
   const [strategy, setStrategy] = useState<StrategyKey>("trend");
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState<string>("");
@@ -171,7 +159,14 @@ function Index() {
         throw new Error(`Gagal ambil data Indodax lewat proxy server. (${msg})`);
       }
       setTicker(t);
-      const ind = computeAnalysis(candles, Number(t.last), Math.floor(Date.now() / 1000));
+      const computed = computeAnalysis(candles, Number(t.last), Math.floor(Date.now() / 1000));
+      const volIdr = Number.isFinite(Number(t.vol_idr)) && t.vol_idr !== undefined && t.vol_idr !== ""
+        ? Number(t.vol_idr)
+        : (pairs.find((p) => p.id === pair)?.volIdr ?? null);
+      const liqWarn = liquidityWarning(volIdr);
+      const ind: MarketAnalysis = liqWarn
+        ? { ...computed, warnings: [liqWarn, ...computed.warnings] }
+        : computed;
       setIndicators(ind);
 
       setStage("Meminta analisis Gemini…");
@@ -205,8 +200,38 @@ function Index() {
       setLoading(false);
       setStage("");
     }
-  }, [pair, strategy, analyze, getTicker, getCandles]);
+  }, [pair, pairs, strategy, analyze, getTicker, getCandles]);
 
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = (await getPairs()) as PairInfo[];
+        if (!cancelled && list.length > 0) {
+          setPairs(list);
+          setPairsSource("live");
+          // Kalau pair yang sedang dipilih tidak ada di daftar langsung (mis. sedang maintenance),
+          // pindah ke pair dengan volume terbesar supaya tampilan dan yang dianalisis selalu sama.
+          setPair((cur) => (list.some((p) => p.id === cur) ? cur : list[0].id));
+        }
+      } catch {
+        if (!cancelled) setPairsSource("fallback");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getPairs]);
+
+  const visiblePairs = useMemo(() => {
+    const q = pairSearch.trim().toLowerCase();
+    const base = q
+      ? pairs.filter((p) => p.id.includes(q) || p.label.toLowerCase().includes(q))
+      : pairs;
+    // pair yang sedang dipilih selalu tetap ada di daftar
+    return base.some((p) => p.id === pair) ? base : [...(pairs.filter((p) => p.id === pair)), ...base];
+  }, [pairs, pairSearch, pair]);
 
   const [hasRun, setHasRun] = useState(false);
 
@@ -260,15 +285,24 @@ function Index() {
         <header className="mb-8 flex flex-col gap-4 sm:mb-10">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <label className="text-xs uppercase tracking-widest text-neon-orange">Pair</label>
+            <input
+              type="search"
+              value={pairSearch}
+              onChange={(e) => setPairSearch(e.target.value)}
+              placeholder="Cari koin (mis. sol, doge)"
+              aria-label="Cari koin"
+              disabled={loading}
+              className="rounded-md border border-[color:var(--neon-magenta)]/60 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-[color:var(--neon-pink)] disabled:opacity-50 sm:w-52"
+            />
             <select
               value={pair}
-              onChange={(e) => setPair(e.target.value as PairKey)}
+              onChange={(e) => setPair(e.target.value)}
               disabled={loading}
               className="rounded-md border border-[color:var(--neon-magenta)] bg-[color:var(--neon-purple)]/60 px-4 py-2 text-sm font-medium text-white outline-none transition focus:border-[color:var(--neon-pink)] focus:ring-2 focus:ring-[color:var(--neon-pink)]/50 disabled:opacity-50"
             >
-              {PAIRS.map((p) => (
-                <option key={p.value} value={p.value} className="bg-[#1B1035]">
-                  {p.label}
+              {visiblePairs.map((p) => (
+                <option key={p.id} value={p.id} className="bg-[#1B1035]">
+                  {p.volIdr !== null ? `${p.label} · ${compactIdr(p.volIdr)}/24j` : p.label}
                 </option>
               ))}
             </select>
@@ -281,6 +315,14 @@ function Index() {
 
             </button>
           </div>
+
+          <p className="-mt-2 text-[11px] text-white/50">
+            {pairsSource === "loading" && "Memuat daftar pair dari Indodax…"}
+            {pairsSource === "live" &&
+              `${pairs.length} pair IDR aktif dari Indodax, diurutkan dari volume 24 jam terbesar.`}
+            {pairsSource === "fallback" &&
+              "Daftar pair Indodax gagal dimuat, memakai daftar cadangan (9 koin). Coba muat ulang halaman."}
+          </p>
 
           <div className="flex flex-col gap-2">
             <label className="text-xs uppercase tracking-widest text-neon-orange">

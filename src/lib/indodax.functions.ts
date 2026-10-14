@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "./auth";
 import { parseIndodaxCandles, type Candle } from "./indicators";
+import { parsePairs, type PairInfo } from "./pairs";
 
 export type IndodaxTicker = {
   last: string;
@@ -82,4 +83,21 @@ export const fetchIndodaxCandles = createServerFn({ method: "POST" })
     }
     if (skipped > 0) console.warn(`[indodax candles] ${skipped} baris candle tidak valid dibuang`);
     return candles satisfies Candle[];
+  });
+
+/** Daftar semua pair IDR yang aktif + volume 24 jam (endpoint resmi /api/pairs dan /api/summaries). */
+export const fetchIndodaxPairs = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async (): Promise<PairInfo[]> => {
+    const [pairsRes, summariesRes] = await Promise.all([
+      fetch("https://indodax.com/api/pairs"),
+      fetch("https://indodax.com/api/summaries"),
+    ]);
+    if (!pairsRes.ok) throw new Error(`Indodax /api/pairs HTTP ${pairsRes.status}`);
+    const pairsJson: unknown = await pairsRes.json();
+    // Volume hanya pelengkap: kalau /api/summaries gagal, daftar pair tetap dipakai.
+    const summariesJson: unknown = summariesRes.ok ? await summariesRes.json().catch(() => null) : null;
+    const list = parsePairs(pairsJson, summariesJson);
+    if (list.length === 0) throw new Error("Daftar pair dari Indodax tidak bisa dibaca.");
+    return list;
   });

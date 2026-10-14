@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "./auth";
+import { formatIdr } from "./format";
 
 export type Strategy = "trend" | "contrarian";
 
@@ -32,11 +33,7 @@ export type GeminiAnalysisInput = {
 };
 
 function idr(n: number): string {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(n);
+  return formatIdr(n);
 }
 
 type AnalysisResult = {
