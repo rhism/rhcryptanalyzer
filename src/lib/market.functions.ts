@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "./auth";
 
 export type FearGreed = {
   value: number;
@@ -11,7 +12,9 @@ export type UsdIdr = {
   date: string;
 };
 
-export const fetchFearGreed = createServerFn({ method: "GET" }).handler(
+export const fetchFearGreed = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(
   async (): Promise<FearGreed> => {
     const res = await fetch("https://api.alternative.me/fng/", {
       headers: { Accept: "application/json" },
@@ -30,7 +33,9 @@ export const fetchFearGreed = createServerFn({ method: "GET" }).handler(
   },
 );
 
-export const fetchUsdIdr = createServerFn({ method: "GET" }).handler(
+export const fetchUsdIdr = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(
   async (): Promise<UsdIdr> => {
     const res = await fetch("https://api.frankfurter.dev/v1/latest?from=USD&to=IDR", {
       headers: { Accept: "application/json" },
@@ -162,7 +167,9 @@ export type NewsSummary = {
   provider: string;
 };
 
-export const fetchNewsSummary = createServerFn({ method: "POST" }).handler(
+export const fetchNewsSummary = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(
   async (): Promise<NewsSummary> => {
     const [coindesk, cointelegraph] = await Promise.all([
       fetchFeed("https://www.coindesk.com/arc/outboundfeeds/rss/", 8),

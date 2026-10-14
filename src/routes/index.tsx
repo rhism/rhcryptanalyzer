@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { analyzeWithGemini } from "@/lib/gemini.functions";
 import { fetchIndodaxTicker, fetchIndodaxCandles } from "@/lib/indodax.functions";
 import { LockScreen } from "@/components/LockScreen";
+import { AUTH_TOKEN_KEY } from "@/lib/auth";
+import { checkSession } from "@/lib/lock.functions";
 import { MarketSummary } from "@/components/MarketSummary";
 
 
@@ -13,19 +15,38 @@ export const Route = createFileRoute("/")({
   ssr: false,
 });
 
-const STORAGE_KEY = "app_unlocked_v1";
-
 function Gate() {
   const [unlocked, setUnlocked] = useState(false);
   const [ready, setReady] = useState(false);
+  const verifySession = useServerFn(checkSession);
   useEffect(() => {
-    try {
-      if (sessionStorage.getItem(STORAGE_KEY) === "1") setUnlocked(true);
-    } catch {
-      // ignore
-    }
-    setReady(true);
-  }, []);
+    let cancelled = false;
+    (async () => {
+      let hasToken = false;
+      try {
+        hasToken = !!sessionStorage.getItem(AUTH_TOKEN_KEY);
+      } catch {
+        // ignore
+      }
+      if (hasToken) {
+        try {
+          // Server yang memutuskan: token harus valid dan belum kedaluwarsa.
+          await verifySession();
+          if (!cancelled) setUnlocked(true);
+        } catch {
+          try {
+            sessionStorage.removeItem(AUTH_TOKEN_KEY);
+          } catch {
+            // ignore
+          }
+        }
+      }
+      if (!cancelled) setReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [verifySession]);
   if (!ready) return null;
   if (!unlocked) return <LockScreen onUnlock={() => setUnlocked(true)} />;
   return <Index />;

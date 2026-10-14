@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "./auth";
 
 export type IndodaxTicker = {
   last: string;
@@ -25,6 +26,7 @@ function normalizePair(pair: string): { underscore: string; upper: string } {
 }
 
 export const fetchIndodaxTicker = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .inputValidator((input: { pair: string }) => ({ pair: input.pair }))
   .handler(async ({ data }) => {
     const { underscore } = normalizePair(data.pair);
@@ -39,6 +41,7 @@ export const fetchIndodaxTicker = createServerFn({ method: "POST" })
   });
 
 export const fetchIndodaxCandles = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .inputValidator((input: { pair: string; from: number; to: number }) => {
     if (!Number.isFinite(input.from) || !Number.isFinite(input.to)) {
       throw new Error("Invalid range");

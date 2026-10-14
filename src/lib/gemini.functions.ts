@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "./auth";
 
 export type Strategy = "trend" | "contrarian";
 
@@ -146,6 +147,7 @@ async function callGroq(prompt: string, apiKey: string): Promise<Omit<AnalysisRe
 }
 
 export const analyzeWithGemini = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .inputValidator((input: GeminiAnalysisInput) => {
     if (!input || typeof input !== "object") throw new Error("Invalid input");
     if (!input.pair || !input.ticker || !input.indicators) {

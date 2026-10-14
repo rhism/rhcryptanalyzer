@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { verifyPin } from "@/lib/lock.functions";
+import { AUTH_TOKEN_KEY } from "@/lib/auth";
 
 const PIN_LENGTH = 6;
-const STORAGE_KEY = "app_unlocked_v1";
 
 export function LockScreen({ onUnlock }: { onUnlock: () => void }) {
   const [pin, setPin] = useState("");
@@ -21,10 +21,12 @@ export function LockScreen({ onUnlock }: { onUnlock: () => void }) {
     setChecking(true);
     setError(null);
     try {
-      const res = (await verify({ data: { pin: value } })) as { ok: boolean };
+      const res = (await verify({ data: { pin: value } })) as
+        | { ok: true; token: string }
+        | { ok: false };
       if (res.ok) {
         try {
-          sessionStorage.setItem(STORAGE_KEY, "1");
+          sessionStorage.setItem(AUTH_TOKEN_KEY, res.token);
         } catch {
           // ignore
         }
@@ -118,16 +120,4 @@ export function LockScreen({ onUnlock }: { onUnlock: () => void }) {
       `}</style>
     </div>
   );
-}
-
-export function useUnlocked(): [boolean, () => void] {
-  const [unlocked, setUnlocked] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return sessionStorage.getItem(STORAGE_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
-  return [unlocked, () => setUnlocked(true)];
 }

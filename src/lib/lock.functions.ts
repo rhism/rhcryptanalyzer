@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware, issueToken } from "./auth";
 
 export const verifyPin = createServerFn({ method: "POST" })
   .inputValidator((input: { pin: string }) => {
@@ -18,5 +19,11 @@ export const verifyPin = createServerFn({ method: "POST" })
       diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
     }
     if (diff !== 0) ok = false;
-    return { ok };
+    if (!ok) return { ok: false as const };
+    return { ok: true as const, token: await issueToken(expected) };
   });
+
+/** Dipakai Gate saat halaman dibuka: apakah token di browser masih valid? */
+export const checkSession = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async () => ({ ok: true as const }));
