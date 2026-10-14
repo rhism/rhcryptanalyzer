@@ -5,6 +5,7 @@ import { analyzeWithGemini } from "@/lib/gemini.functions";
 import { fetchIndodaxTicker, fetchIndodaxCandles } from "@/lib/indodax.functions";
 import { LockScreen } from "@/components/LockScreen";
 import { AUTH_TOKEN_KEY } from "@/lib/auth";
+import { computeAnalysis, PARAMS, type Candle, type MarketAnalysis } from "@/lib/indicators";
 import { checkSession } from "@/lib/lock.functions";
 import { MarketSummary } from "@/components/MarketSummary";
 
@@ -75,13 +76,6 @@ type Ticker = {
   sell?: string;
 };
 
-type Indicators = {
-  rsi14: number | null;
-  ma7: number | null;
-  ma25: number | null;
-  closes: number[];
-};
-
 type GeminiAnalysis = {
   kesimpulan: string;
   rekomendasi: "BUY" | "HOLD" | "SELL" | string;
@@ -90,35 +84,6 @@ type GeminiAnalysis = {
   resistance: string;
   confidence: "LOW" | "MEDIUM" | "HIGH" | string;
 };
-
-function sma(values: number[], period: number): number | null {
-  if (values.length < period) return null;
-  const slice = values.slice(values.length - period);
-  return slice.reduce((a, b) => a + b, 0) / period;
-}
-
-function rsi(values: number[], period = 14): number | null {
-  if (values.length < period + 1) return null;
-  let gains = 0;
-  let losses = 0;
-  for (let i = 1; i <= period; i++) {
-    const diff = values[i] - values[i - 1];
-    if (diff >= 0) gains += diff;
-    else losses -= diff;
-  }
-  let avgGain = gains / period;
-  let avgLoss = losses / period;
-  for (let i = period + 1; i < values.length; i++) {
-    const diff = values[i] - values[i - 1];
-    const gain = diff > 0 ? diff : 0;
-    const loss = diff < 0 ? -diff : 0;
-    avgGain = (avgGain * (period - 1) + gain) / period;
-    avgLoss = (avgLoss * (period - 1) + loss) / period;
-  }
-  if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - 100 / (1 + rs);
-}
 
 function formatIDR(n: number | string | null | undefined): string {
   if (n === null || n === undefined || n === "") return "-";
@@ -133,6 +98,10 @@ function formatIDR(n: number | string | null | undefined): string {
 
 
 
+
+function levelText(n: number | null): string {
+  return n === null ? "Tidak terdeteksi" : formatIDR(n);
+}
 
 function recoStyle(reco: string): { bg: string; text: string; label: string } {
 
@@ -172,7 +141,7 @@ function Index() {
   const [stage, setStage] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [ticker, setTicker] = useState<Ticker | null>(null);
-  const [indicators, setIndicators] = useState<Indicators | null>(null);
+  const [indicators, setIndicators] = useState<MarketAnalysis | null>(null);
   const [analysis, setAnalysis] = useState<GeminiAnalysis | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
@@ -189,25 +158,20 @@ function Index() {
     try {
       setStage("Fetching ticker Indodax…");
       let t: Ticker;
-      let closes: number[];
+      let candles: Candle[];
       try {
         const now = Math.floor(Date.now() / 1000);
-        const from = now - 60 * 60 * 24 * 30;
-        [t, closes] = await Promise.all([
+        const from = now - 60 * 60 * 24 * 120;
+        [t, candles] = await Promise.all([
           getTicker({ data: { pair } }) as Promise<Ticker>,
-          getCandles({ data: { pair, from, to: now } }) as Promise<number[]>,
+          getCandles({ data: { pair, from, to: now } }) as Promise<Candle[]>,
         ]);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         throw new Error(`Gagal ambil data Indodax lewat proxy server. (${msg})`);
       }
       setTicker(t);
-      const ind: Indicators = {
-        rsi14: rsi(closes, 14),
-        ma7: sma(closes, 7),
-        ma25: sma(closes, 25),
-        closes,
-      };
+      const ind = computeAnalysis(candles, Number(t.last), Math.floor(Date.now() / 1000));
       setIndicators(ind);
 
       setStage("Meminta analisis Gemini…");
@@ -216,7 +180,21 @@ function Index() {
           pair,
           strategy,
           ticker: { last: t.last, high: t.high, low: t.low, buy: t.buy, sell: t.sell },
-          indicators: { rsi14: ind.rsi14, ma7: ind.ma7, ma25: ind.ma25 },
+          indicators: {
+            rsi14: ind.rsi14,
+            ma7: ind.ma7,
+            ma25: ind.ma25,
+            macd: ind.macd,
+            atr14: ind.atr14,
+            volumeRatio: ind.volumeRatio,
+          },
+          levels: {
+            support: ind.levels.support,
+            resistance: ind.levels.resistance,
+            stopLoss: ind.plan?.stopLoss ?? null,
+            target1: ind.plan?.target1 ?? null,
+            target2: ind.plan?.target2 ?? null,
+          },
         },
       });
       setAnalysis(a as GeminiAnalysis);
@@ -377,6 +355,68 @@ function Index() {
         )}
 
 
+
+        {ticker && indicators && !loading && (
+          <section className="neon-card-violet mb-6 rounded-2xl p-5 sm:p-7">
+            <h2 className="mb-1 text-xs font-semibold uppercase tracking-widest text-neon-orange">
+              Level &amp; rencana risiko — dihitung kode
+            </h2>
+            <p className="mb-4 text-xs text-white/60">
+              Rencana HIPOTETIS jika membeli di harga sekarang (spot, tanpa short). Ini bukan rekomendasi: keputusan
+              BUY/HOLD/SELL ada di analisis di bawah. R = jarak harga masuk ke stop-loss.
+            </p>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <Stat label="Support terdekat" value={levelText(indicators.levels.support)} />
+              <Stat label="Resistance terdekat" value={levelText(indicators.levels.resistance)} />
+              <Stat
+                label="Risiko per transaksi"
+                value={indicators.plan ? `${indicators.plan.riskPct.toFixed(2)}%` : "-"}
+              />
+              <Stat label="Stop-loss" value={indicators.plan ? formatIDR(indicators.plan.stopLoss) : "-"} />
+              <Stat
+                label={`Target 1 (${PARAMS.target1R}R)`}
+                value={indicators.plan ? formatIDR(indicators.plan.target1) : "-"}
+              />
+              <Stat
+                label={`Target 2 (${PARAMS.target2R}R)`}
+                value={indicators.plan ? formatIDR(indicators.plan.target2) : "-"}
+              />
+              <Stat
+                label="ATR 14 (gerak harian)"
+                value={
+                  indicators.atr14 != null
+                    ? `${formatIDR(indicators.atr14)} (${indicators.atrPct?.toFixed(2)}%)`
+                    : "-"
+                }
+              />
+              <Stat
+                label="MACD histogram"
+                value={
+                  indicators.macd
+                    ? `${formatIDR(indicators.macd.hist)}${
+                        indicators.macd.histPrev === null ? "" : indicators.macd.hist > indicators.macd.histPrev ? " ↑" : " ↓"
+                      }`
+                    : "-"
+                }
+              />
+              <Stat
+                label="Volume vs rata-rata"
+                value={indicators.volumeRatio != null ? `${indicators.volumeRatio.toFixed(2)}x` : "-"}
+              />
+            </div>
+            {indicators.warnings.length > 0 && (
+              <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-yellow-200">
+                {indicators.warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-3 text-[11px] text-white/45">
+              Berdasarkan {indicators.closedCount} candle harian selesai (+ harga live). Candle hari ini yang belum
+              selesai tidak dipakai untuk ATR, volume, dan level.
+            </p>
+          </section>
+        )}
 
         {analysis && reco && !loading && (
           <section className="neon-card rounded-2xl p-5 sm:p-7">

@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "./auth";
+import { parseIndodaxCandles, type Candle } from "./indicators";
 
 export type IndodaxTicker = {
   last: string;
@@ -70,7 +71,15 @@ export const fetchIndodaxCandles = createServerFn({ method: "POST" })
       console.error("[indodax candles] unexpected shape. url:", url, "body:", text.slice(0, 500));
       throw new Error("Indodax candles response invalid");
     }
-    return (json as Array<{ Close: number | string }>)
-      .map((c) => Number(c?.Close))
-      .filter((n) => Number.isFinite(n));
+    const { candles, skipped } = parseIndodaxCandles(json);
+    if (candles.length === 0) {
+      console.error("[indodax candles] tidak ada candle valid. url:", url, "body:", text.slice(0, 500));
+      throw new Error(
+        json.length === 0
+          ? "Indodax tidak mengirim candle untuk rentang ini."
+          : "Format candle Indodax berubah (field Time/Open/High/Low/Close/Volume tidak terbaca).",
+      );
+    }
+    if (skipped > 0) console.warn(`[indodax candles] ${skipped} baris candle tidak valid dibuang`);
+    return candles satisfies Candle[];
   });
