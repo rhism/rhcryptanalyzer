@@ -10,6 +10,8 @@ export type PairInfo = {
   volIdr: number | null;
   /** Biaya taker dalam persen (untuk backtest nanti); null kalau tidak ada. */
   takerFeePct: number | null;
+  /** Nilai order minimum di Indodax dalam Rupiah (trade_min_base_currency); null kalau tidak ada. */
+  minOrderIdr: number | null;
 };
 
 /** Di bawah ini dianggap koin sepi. Ambang awal; bisa disetel lewat backtest/pengalaman. */
@@ -26,7 +28,13 @@ export const FALLBACK_PAIRS: PairInfo[] = [
   ["dogeidr", "DOGE"],
   ["beatidr", "BEAT"],
   ["audioidr", "AUDIO"],
-].map(([id, sym]) => ({ id, label: `${sym} / IDR`, volIdr: null, takerFeePct: null }));
+].map(([id, sym]) => ({
+  id,
+  label: `${sym} / IDR`,
+  volIdr: null,
+  takerFeePct: null,
+  minOrderIdr: null,
+}));
 
 const truthy = (v: unknown) => v === true || v === 1 || v === "1" || v === "true";
 
@@ -63,6 +71,7 @@ export function parsePairs(pairsJson: unknown, summariesJson: unknown): PairInfo
       label: `${unit.toUpperCase()} / IDR`,
       volIdr: num(tickers[tickerId]?.vol_idr),
       takerFeePct: num(p.trade_fee_percent_taker) ?? num(p.trade_fee_percent),
+      minOrderIdr: num(p.trade_min_base_currency),
     });
   }
   return out.sort((a, b) => {

@@ -8,6 +8,10 @@ import { AUTH_TOKEN_KEY } from "@/lib/auth";
 import { computeAnalysis, PARAMS, type Candle, type MarketAnalysis } from "@/lib/indicators";
 import { compactIdr, formatIdr } from "@/lib/format";
 import { FALLBACK_PAIRS, liquidityWarning, type PairInfo } from "@/lib/pairs";
+import { computeSignal, isStablecoin, type Signal } from "@/lib/signals";
+import { computeSizing, SIZING_PARAMS, type Sizing } from "@/lib/sizing";
+import { friendlyAiError } from "@/lib/ai-errors";
+import { SignalCard } from "@/components/SignalCard";
 import { checkSession } from "@/lib/lock.functions";
 import { MarketSummary } from "@/components/MarketSummary";
 
@@ -71,6 +75,7 @@ type GeminiAnalysis = {
   support: string;
   resistance: string;
   confidence: "LOW" | "MEDIUM" | "HIGH" | string;
+  provider?: string;
 };
 
 function formatIDR(n: number | string | null | undefined): string {
@@ -85,21 +90,6 @@ function formatIDR(n: number | string | null | undefined): string {
 
 function levelText(n: number | null): string {
   return n === null ? "Tidak terdeteksi" : formatIDR(n);
-}
-
-function recoStyle(reco: string): { bg: string; text: string; label: string } {
-
-  const r = reco?.toUpperCase();
-  if (r === "BUY") return { bg: "bg-emerald-500/20 border-emerald-400", text: "text-emerald-300", label: "BUY" };
-  if (r === "SELL") return { bg: "bg-red-500/20 border-red-400", text: "text-red-300", label: "SELL" };
-  return { bg: "bg-yellow-500/20 border-yellow-400", text: "text-yellow-200", label: "HOLD" };
-}
-
-function confidenceStyle(c: string): string {
-  const v = c?.toUpperCase();
-  if (v === "HIGH") return "bg-emerald-500/20 text-emerald-200 border-emerald-400/50";
-  if (v === "LOW") return "bg-red-500/20 text-red-200 border-red-400/50";
-  return "bg-yellow-500/20 text-yellow-200 border-yellow-400/50";
 }
 
 type StrategyKey = "trend" | "contrarian";
@@ -143,6 +133,9 @@ function Index() {
     setAnalysis(null);
     setTicker(null);
     setIndicators(null);
+    setSignal(null);
+    setRunInfo(null);
+    setAiError(null);
     try {
       setStage("Fetching ticker Indodax…");
       let t: Ticker;
@@ -169,11 +162,28 @@ function Index() {
         : computed;
       setIndicators(ind);
 
-      setStage("Meminta analisis Gemini…");
+      // Keputusan BUY/HOLD/SELL dihitung kode; AI hanya menjelaskan.
+      const pairInfo = pairs.find((p) => p.id === pair);
+      const sig = computeSignal(ind, strategy, pair);
+      setSignal(sig);
+      setRunInfo({
+        volIdr,
+        takerFeePct: pairInfo?.takerFeePct ?? null,
+        minOrderIdr: pairInfo?.minOrderIdr ?? null,
+        strategy,
+      });
+      if (sig.action === "NA") {
+        setUpdatedAt(new Date());
+        return;
+      }
+
+      setStage("Meminta penjelasan AI…");
+      try {
       const a = await analyze({
         data: {
           pair,
           strategy,
+          signal: { action: sig.action, reasons: sig.reasons, blockedBy: sig.blockedBy },
           ticker: { last: t.last, high: t.high, low: t.low, buy: t.buy, sell: t.sell },
           indicators: {
             rsi14: ind.rsi14,
@@ -193,6 +203,10 @@ function Index() {
         },
       });
       setAnalysis(a as GeminiAnalysis);
+      } catch (e) {
+        // Gangguan AI tidak boleh menyembunyikan sinyal kode.
+        setAiError(friendlyAiError(e instanceof Error ? e.message : String(e)));
+      }
       setUpdatedAt(new Date());
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -212,8 +226,11 @@ function Index() {
           setPairs(list);
           setPairsSource("live");
           // Kalau pair yang sedang dipilih tidak ada di daftar langsung (mis. sedang maintenance),
-          // pindah ke pair dengan volume terbesar supaya tampilan dan yang dianalisis selalu sama.
-          setPair((cur) => (list.some((p) => p.id === cur) ? cur : list[0].id));
+          // pindah ke koin biasa dengan volume terbesar (bukan stablecoin, yang tidak bisa dianalisis)
+          // supaya tampilan dan yang dianalisis selalu sama.
+          setPair((cur) =>
+            list.some((p) => p.id === cur) ? cur : (list.find((p) => !isStablecoin(p.id)) ?? list[0]).id,
+          );
         }
       } catch {
         if (!cancelled) setPairsSource("fallback");
@@ -234,13 +251,58 @@ function Index() {
   }, [pairs, pairSearch, pair]);
 
   const [hasRun, setHasRun] = useState(false);
+  const [signal, setSignal] = useState<Signal | null>(null);
+  const [runInfo, setRunInfo] = useState<{
+    volIdr: number | null;
+    takerFeePct: number | null;
+    minOrderIdr: number | null;
+    strategy: StrategyKey;
+  } | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [capitalText, setCapitalText] = useState("");
+  const [riskText, setRiskText] = useState(String(SIZING_PARAMS.defaultRiskPct));
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+
+  // Modal & persen risiko disimpan di browser ini saja (tidak dikirim ke server).
+  useEffect(() => {
+    try {
+      const c = localStorage.getItem("rhc_capital_v1");
+      if (c && /^\d+$/.test(c)) setCapitalText(c);
+      const r = localStorage.getItem("rhc_riskpct_v1");
+      if (r && Number.isFinite(Number(r.replace(",", ".")))) setRiskText(r);
+    } catch {
+      // ignore
+    }
+    setPrefsLoaded(true);
+  }, []);
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    try {
+      localStorage.setItem("rhc_capital_v1", capitalText);
+      localStorage.setItem("rhc_riskpct_v1", riskText);
+    } catch {
+      // ignore
+    }
+  }, [prefsLoaded, capitalText, riskText]);
+
+  const sizing = useMemo<Sizing>(
+    () =>
+      computeSizing({
+        capital: Number(capitalText),
+        riskPct: Number(riskText.replace(",", ".")),
+        plan: indicators?.plan ?? null,
+        volIdr: runInfo?.volIdr ?? null,
+        takerFeePct: runInfo?.takerFeePct ?? null,
+        minOrderIdr: runInfo?.minOrderIdr ?? null,
+      }),
+    [capitalText, riskText, indicators, runInfo],
+  );
 
   const handleRun = useCallback(() => {
     setHasRun(true);
     void run();
   }, [run]);
 
-  const reco = analysis ? recoStyle(analysis.rekomendasi) : null;
 
   return (
     <div className="min-h-screen px-4 py-8 sm:px-6 sm:py-12">
@@ -251,7 +313,7 @@ function Index() {
             <span className="text-neon-orange">Analyzer</span>
           </h1>
           <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-            Indodax ticker + RSI/MA hitung sendiri + rekomendasi Gemini. Read-only, no backend.
+            Data Indodax + indikator & sinyal dihitung kode + penjelasan AI. Tidak ada transaksi otomatis.
           </p>
         </div>
 
@@ -303,6 +365,7 @@ function Index() {
               {visiblePairs.map((p) => (
                 <option key={p.id} value={p.id} className="bg-[#1B1035]">
                   {p.volIdr !== null ? `${p.label} · ${compactIdr(p.volIdr)}/24j` : p.label}
+                  {isStablecoin(p.id) ? " · stablecoin" : ""}
                 </option>
               ))}
             </select>
@@ -398,6 +461,28 @@ function Index() {
 
 
 
+        {signal && runInfo && !loading && (
+          <SignalCard
+            signal={signal}
+            strategyLabel={STRATEGIES.find((x) => x.value === runInfo.strategy)?.label ?? ""}
+            sizing={sizing}
+            capitalText={capitalText}
+            onCapitalChange={setCapitalText}
+            riskText={riskText}
+            onRiskChange={setRiskText}
+          />
+        )}
+
+        {aiError && !loading && (
+          <div className="mb-6 rounded-xl border border-yellow-400/50 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+            <p className="font-semibold">Penjelasan AI belum tersedia</p>
+            <p className="mt-1">{aiError}</p>
+            <p className="mt-1 text-xs text-yellow-100/70">
+              Sinyal dan angka di atas dihitung kode dan tidak terpengaruh. Tekan Refresh Analysis untuk mencoba lagi.
+            </p>
+          </div>
+        )}
+
         {ticker && indicators && !loading && (
           <section className="neon-card-violet mb-6 rounded-2xl p-5 sm:p-7">
             <h2 className="mb-1 text-xs font-semibold uppercase tracking-widest text-neon-orange">
@@ -460,23 +545,19 @@ function Index() {
           </section>
         )}
 
-        {analysis && reco && !loading && (
+        {analysis && !loading && (
           <section className="neon-card rounded-2xl p-5 sm:p-7">
             <div className="mb-5 flex flex-wrap items-center gap-3">
-              <div
-                className={`rounded-lg border-2 px-5 py-2 text-2xl font-extrabold tracking-widest ${reco.bg} ${reco.text}`}
-              >
-                {reco.label}
-              </div>
-              <span
-                className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-widest ${confidenceStyle(analysis.confidence)}`}
-              >
-                Confidence: {analysis.confidence}
-              </span>
-              {updatedAt && (
-                <span className="ml-auto text-xs text-white/60">
-                  Updated {updatedAt.toLocaleString("id-ID")}
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-neon-orange">
+                Penjelasan AI — keputusan tetap dari aturan kode di atas
+              </h2>
+              {analysis.provider && (
+                <span className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-widest text-white/70">
+                  {analysis.provider}
                 </span>
+              )}
+              {updatedAt && (
+                <span className="ml-auto text-xs text-white/60">Updated {updatedAt.toLocaleString("id-ID")}</span>
               )}
             </div>
 

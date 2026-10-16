@@ -22,6 +22,12 @@ export type GeminiAnalysisInput = {
     atr14?: number | null;
     volumeRatio?: number | null;
   };
+  /** Keputusan final dari mesin sinyal kode. AI hanya boleh menjelaskan, tidak mengubahnya. */
+  signal?: {
+    action: "BUY" | "HOLD" | "SELL";
+    reasons: string[];
+    blockedBy: string | null;
+  };
   /** Level yang SUDAH dihitung kode (bukan tebakan AI). */
   levels?: {
     support: number | null;
@@ -79,7 +85,16 @@ Indikator (dihitung dari candle harian):
 - ATR14 (rata-rata rentang gerak harian): ${ind.atr14 != null ? `${ind.atr14.toFixed(2)} (${((ind.atr14 / Number(ticker.last)) * 100).toFixed(2)}% dari harga)` : "-"}
 - Volume candle harian terakhir vs rata-rata: ${ind.volumeRatio != null ? `${ind.volumeRatio.toFixed(2)}x` : "-"}
 
-PEDOMAN REKOMENDASI — WAJIB pakai lensa "${strategyLabel}" saja (nilai objektif, jangan bias ke HOLD):
+KEPUTUSAN SISTEM (FINAL — dihitung oleh kode, kamu TIDAK boleh mengubah atau membantahnya):
+${
+  data.signal
+    ? `- Rekomendasi: ${data.signal.action}
+- Dasar keputusan: ${data.signal.reasons.slice(0, 6).join(" ")}
+${data.signal.blockedBy ? `- Sinyal BUY ditunda karena: ${data.signal.blockedBy}\n` : ""}- Tugasmu HANYA menjelaskan keputusan ini dengan bahasa awam. Field "rekomendasi" WAJIB sama persis dengan "${data.signal.action}".`
+    : "- (tidak ada keputusan sistem; tentukan sendiri berdasarkan aturan di bawah)"
+}
+
+ATURAN STRATEGI "${strategyLabel}" yang dipakai sistem (bahan penjelasanmu; keputusan sudah final di atas):
 ${
   strategy === "contrarian"
     ? `- Lensa CONTRARIAN: melawan arah tren, cari titik jenuh.
@@ -188,6 +203,17 @@ export const analyzeWithGemini = createServerFn({ method: "POST" })
     if (!input.pair || !input.ticker || !input.indicators) {
       throw new Error("Missing pair/ticker/indicators");
     }
+    if (input.signal !== undefined) {
+      const s = input.signal as GeminiAnalysisInput["signal"];
+      if (
+        !s ||
+        !["BUY", "HOLD", "SELL"].includes(s.action) ||
+        !Array.isArray(s.reasons) ||
+        !s.reasons.every((r) => typeof r === "string")
+      ) {
+        throw new Error("Invalid signal");
+      }
+    }
     return input;
   })
   .handler(async ({ data }): Promise<AnalysisResult> => {
@@ -199,8 +225,10 @@ export const analyzeWithGemini = createServerFn({ method: "POST" })
 
     const prompt = buildPrompt(data);
     // Level support/resistance selalu dari hitungan kode, bukan dari AI.
+    // Rekomendasi juga dikunci ke keputusan mesin sinyal: AI hanya menjelaskan.
     const withSystemLevels = (r: Omit<AnalysisResult, "provider">) => ({
       ...r,
+      rekomendasi: data.signal?.action ?? r.rekomendasi,
       support: data.levels?.support != null ? idr(data.levels.support) : "Tidak terdeteksi",
       resistance: data.levels?.resistance != null ? idr(data.levels.resistance) : "Tidak terdeteksi",
     });
