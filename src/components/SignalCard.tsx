@@ -1,6 +1,7 @@
 import { formatIdr } from "@/lib/format";
 import { SIZING_PARAMS, type Sizing } from "@/lib/sizing";
 import type { Signal, SignalAction } from "@/lib/signals";
+import { evidenceFor } from "@/lib/evidence";
 
 const BADGE: Record<SignalAction, { box: string; label: string }> = {
   BUY: { box: "bg-emerald-500/20 border-emerald-400 text-emerald-300", label: "BUY" },
@@ -42,6 +43,7 @@ export function SignalCard({
   onRiskChange: (v: string) => void;
 }) {
   const badge = BADGE[signal.action];
+  const evidence = signal.action === "NA" ? null : evidenceFor(signal.strategy);
   const capitalShown = capitalText
     ? new Intl.NumberFormat("id-ID").format(Number(capitalText))
     : "";
@@ -67,6 +69,21 @@ export function SignalCard({
       </div>
 
       <p className="mb-4 text-base font-medium text-white">{signal.headline}</p>
+
+      {evidence && evidence.level === "warning" && (
+        <div
+          data-testid="evidence"
+          className="mb-4 rounded-lg border border-red-400/50 bg-red-500/10 p-3 text-sm text-red-100"
+        >
+          <p className="font-semibold">{evidence.title}</p>
+          {evidence.lines.map((l) => (
+            <p key={l} className="mt-1">
+              {l}
+            </p>
+          ))}
+          <p className="mt-2 text-[11px] text-red-100/70">{evidence.footnote}</p>
+        </div>
+      )}
 
       {signal.blockedBy && (
         <div className="mb-4 rounded-lg border border-yellow-400/50 bg-yellow-500/10 p-3 text-sm text-yellow-100">
@@ -183,9 +200,25 @@ export function SignalCard({
         )
       )}
 
+      {evidence && evidence.level === "info" && (
+        <details
+          data-testid="evidence"
+          className="mt-4 rounded-lg border border-white/15 bg-black/20 p-3 text-sm text-white/85"
+        >
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest text-neon-orange">
+            Bukti historis strategi ini (hasil uji 9,8 tahun)
+          </summary>
+          <ul className="mt-3 list-disc space-y-1 pl-5">
+            {evidence.lines.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11px] text-white/50">{evidence.footnote}</p>
+        </details>
+      )}
+
       <p className="mt-4 text-[11px] text-white/45">
-        Aturan ini belum diuji di data lama (backtest menyusul di langkah berikutnya), jadi anggap
-        sebagai alat bantu berpikir, bukan jaminan untung. Bukan saran finansial.
+        Anggap sinyal ini sebagai alat bantu berpikir, bukan jaminan untung. Bukan saran finansial.
       </p>
     </section>
   );

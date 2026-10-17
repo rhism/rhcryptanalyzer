@@ -11,6 +11,7 @@ import { FALLBACK_PAIRS, liquidityWarning, type PairInfo } from "@/lib/pairs";
 import { computeSignal, isStablecoin, type Signal } from "@/lib/signals";
 import { computeSizing, SIZING_PARAMS, type Sizing } from "@/lib/sizing";
 import { friendlyAiError } from "@/lib/ai-errors";
+import { exitNote } from "@/lib/evidence";
 import { SignalCard } from "@/components/SignalCard";
 import { checkSession } from "@/lib/lock.functions";
 import { MarketSummary } from "@/components/MarketSummary";
@@ -492,6 +493,11 @@ function Index() {
               Rencana HIPOTETIS jika membeli di harga sekarang (spot, tanpa short). Ini bukan rekomendasi: keputusan
               BUY/HOLD/SELL ada di analisis di bawah. R = jarak harga masuk ke stop-loss.
             </p>
+            {runInfo && (
+              <p data-testid="exit-note" className="mb-4 text-xs text-yellow-100/80">
+                {exitNote(runInfo.strategy)}
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <Stat label="Support terdekat" value={levelText(indicators.levels.support)} />
               <Stat label="Resistance terdekat" value={levelText(indicators.levels.resistance)} />
