@@ -160,6 +160,11 @@ export function SignalCard({
             </label>
           </div>
 
+          <p data-testid="risk-hint" className="mb-3 text-[11px] text-white/55">
+            Risiko 1% artinya: kalau stop-loss kena, rugimu sekitar 1% dari TOTAL modal (modal Rp
+            10.000.000 → rugi sekitar Rp 100.000). Ukuran belinya dihitung mundur dari angka itu.
+          </p>
+
           {!sizing.ok ? (
             <p className="text-sm text-white/70">{sizing.reason}</p>
           ) : (

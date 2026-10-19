@@ -10,7 +10,7 @@ import { compactIdr, formatIdr } from "@/lib/format";
 import { FALLBACK_PAIRS, liquidityWarning, type PairInfo } from "@/lib/pairs";
 import { computeSignal, isStablecoin, type Signal } from "@/lib/signals";
 import { computeSizing, SIZING_PARAMS, type Sizing } from "@/lib/sizing";
-import { friendlyAiError } from "@/lib/ai-errors";
+import { explainAiError, type AiErrorInfo } from "@/lib/ai-errors";
 import { exitNote } from "@/lib/evidence";
 import { SignalCard } from "@/components/SignalCard";
 import { checkSession } from "@/lib/lock.functions";
@@ -206,7 +206,7 @@ function Index() {
       setAnalysis(a as GeminiAnalysis);
       } catch (e) {
         // Gangguan AI tidak boleh menyembunyikan sinyal kode.
-        setAiError(friendlyAiError(e instanceof Error ? e.message : String(e)));
+        setAiError(explainAiError(e instanceof Error ? e.message : String(e)));
       }
       setUpdatedAt(new Date());
     } catch (e) {
@@ -259,7 +259,7 @@ function Index() {
     minOrderIdr: number | null;
     strategy: StrategyKey;
   } | null>(null);
-  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<AiErrorInfo | null>(null);
   const [capitalText, setCapitalText] = useState("");
   const [riskText, setRiskText] = useState(String(SIZING_PARAMS.defaultRiskPct));
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -477,10 +477,20 @@ function Index() {
         {aiError && !loading && (
           <div className="mb-6 rounded-xl border border-yellow-400/50 bg-yellow-500/10 p-4 text-sm text-yellow-100">
             <p className="font-semibold">Penjelasan AI belum tersedia</p>
-            <p className="mt-1">{aiError}</p>
+            <p className="mt-1" data-testid="ai-error-summary">
+              {aiError.summary}
+            </p>
             <p className="mt-1 text-xs text-yellow-100/70">
               Sinyal dan angka di atas dihitung kode dan tidak terpengaruh. Tekan Refresh Analysis untuk mencoba lagi.
             </p>
+            {aiError.detail && (
+              <details className="mt-2 text-xs text-yellow-100/70">
+                <summary className="cursor-pointer">Detail teknis (untuk dikirim ke pembuat aplikasi)</summary>
+                <pre data-testid="ai-error-detail" className="mt-1 whitespace-pre-wrap break-words">
+                  {aiError.detail}
+                </pre>
+              </details>
+            )}
           </div>
         )}
 
@@ -493,6 +503,11 @@ function Index() {
               Rencana HIPOTETIS jika membeli di harga sekarang (spot, tanpa short). Ini bukan rekomendasi: keputusan
               BUY/HOLD/SELL ada di analisis di bawah. R = jarak harga masuk ke stop-loss.
             </p>
+            <p data-testid="stop-explain" className="mb-4 text-xs text-white/60">
+              &quot;Jarak ke stop-loss&quot; adalah berapa persen harga koin boleh turun sebelum stop-loss kena. Ini
+              BUKAN persen risiko dari modalmu (yang itu kamu atur di bagian Ukuran posisi, mis. 1%). Makin jauh
+              stop-loss-nya, makin kecil posisi yang dibeli.
+            </p>
             {runInfo && (
               <p data-testid="exit-note" className="mb-4 text-xs text-yellow-100/80">
                 {exitNote(runInfo.strategy)}
@@ -502,7 +517,7 @@ function Index() {
               <Stat label="Support terdekat" value={levelText(indicators.levels.support)} />
               <Stat label="Resistance terdekat" value={levelText(indicators.levels.resistance)} />
               <Stat
-                label="Risiko per transaksi"
+                label="Jarak ke stop-loss (% harga)"
                 value={indicators.plan ? `${indicators.plan.riskPct.toFixed(2)}%` : "-"}
               />
               <Stat label="Stop-loss" value={indicators.plan ? formatIDR(indicators.plan.stopLoss) : "-"} />
