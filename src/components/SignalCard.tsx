@@ -97,6 +97,43 @@ export function SignalCard({
         ))}
       </ul>
 
+      {signal.conditions.buy.length > 0 && (
+        <div data-testid="conditions" className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {(
+            [
+              ["Syarat BUY (semua harus ✓)", signal.conditions.buy],
+              ["Syarat SELL (semua harus ✓)", signal.conditions.sell],
+            ] as const
+          ).map(([title, list]) => (
+            <div key={title} className="rounded-lg border border-white/15 bg-black/20 p-3">
+              <p className="mb-2 text-[11px] uppercase tracking-widest text-white/60">{title}</p>
+              <ul className="space-y-1.5 text-sm">
+                {list.map((c) => (
+                  <li key={c.label} className="flex items-start gap-2">
+                    <span
+                      aria-hidden
+                      className={
+                        c.ok === true
+                          ? "text-emerald-300"
+                          : c.ok === false
+                            ? "text-red-300"
+                            : "text-white/40"
+                      }
+                    >
+                      {c.ok === true ? "✓" : c.ok === false ? "✗" : "–"}
+                    </span>
+                    <span className="text-white/85">
+                      {c.label}
+                      <span className="block text-xs text-white/55">{c.detail}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+
       {signal.checks.length > 0 && (
         <div className="mb-4 rounded-lg border border-[color:var(--neon-violet)]/40 bg-black/20 p-3">
           <p className="mb-2 text-[11px] uppercase tracking-widest text-white/60">

@@ -29,6 +29,11 @@ export const SIGNAL_PARAMS = {
 
 export type Check = { label: string; ok: boolean | null };
 
+/** Satu syarat aturan strategi: ok = terpenuhi / belum / null (data belum cukup), plus angka pendukungnya. */
+export type Condition = { label: string; ok: boolean | null; detail: string };
+export type Conditions = { buy: Condition[]; sell: Condition[] };
+const NO_CONDITIONS: Conditions = { buy: [], sell: [] };
+
 export type Signal = {
   action: SignalAction;
   strategy: Strategy;
@@ -42,6 +47,8 @@ export type Signal = {
   total: number;
   /** Terisi kalau aturan strategi memberi BUY tapi saringan risiko membatalkannya. */
   blockedBy: string | null;
+  /** Syarat BUY dan SELL beserta status tiap syarat, supaya terlihat kenapa sinyalnya HOLD. */
+  conditions: Conditions;
 };
 
 const STABLECOINS = new Set([
@@ -83,6 +90,7 @@ const finalize = (
   reasons: string[],
   checks: Check[],
   blockedBy: string | null,
+  conditions: Conditions = NO_CONDITIONS,
 ): Signal => ({
   action,
   strategy,
@@ -92,7 +100,89 @@ const finalize = (
   passed: checks.filter((c) => c.ok === true).length,
   total: checks.length,
   blockedBy,
+  conditions,
 });
+
+function buildConditions(a: MarketAnalysis, strategy: Strategy): Conditions {
+  const price = a.price;
+  if (strategy === "trend") {
+    const have = a.ma7 !== null && a.ma25 !== null && price !== null;
+    const miss = "data belum cukup (butuh minimal 25 harga)";
+    const mk = (
+      label: string,
+      ok: (m7: number, m25: number, p: number) => boolean,
+      det: (m7: number, m25: number, p: number) => string,
+    ): Condition => ({
+      label,
+      ok: have ? ok(a.ma7 as number, a.ma25 as number, price as number) : null,
+      detail: have ? det(a.ma7 as number, a.ma25 as number, price as number) : miss,
+    });
+    return {
+      buy: [
+        mk(
+          "Rata-rata 7 hari di atas rata-rata 25 hari",
+          (m7, m25) => m7 > m25,
+          (m7, m25) => `${f(m7)} vs ${f(m25)}`,
+        ),
+        mk(
+          "Harga di atas rata-rata 7 hari",
+          (m7, _m25, p) => p > m7,
+          (m7, _m25, p) => `${f(p)} vs ${f(m7)}`,
+        ),
+        mk(
+          "Harga di atas rata-rata 25 hari",
+          (_m7, m25, p) => p > m25,
+          (_m7, m25, p) => `${f(p)} vs ${f(m25)}`,
+        ),
+      ],
+      sell: [
+        mk(
+          "Rata-rata 7 hari di bawah rata-rata 25 hari",
+          (m7, m25) => m7 < m25,
+          (m7, m25) => `${f(m7)} vs ${f(m25)}`,
+        ),
+        mk(
+          "Harga di bawah rata-rata 7 hari",
+          (m7, _m25, p) => p < m7,
+          (m7, _m25, p) => `${f(p)} vs ${f(m7)}`,
+        ),
+        mk(
+          "Harga di bawah rata-rata 25 hari",
+          (_m7, m25, p) => p < m25,
+          (_m7, m25, p) => `${f(p)} vs ${f(m25)}`,
+        ),
+      ],
+    };
+  }
+  const r = a.rsi14;
+  const miss = "data belum cukup (butuh minimal 15 harga)";
+  return {
+    buy: [
+      {
+        label: `RSI ${SIGNAL_PARAMS.rsiBuyMax} atau lebih rendah (jenuh jual)`,
+        ok: r === null ? null : r <= SIGNAL_PARAMS.rsiBuyMax,
+        detail:
+          r === null
+            ? miss
+            : r <= SIGNAL_PARAMS.rsiBuyMax
+              ? `RSI ${r.toFixed(1)}`
+              : `RSI ${r.toFixed(1)}, masih ${(r - SIGNAL_PARAMS.rsiBuyMax).toFixed(1)} poin di atas batas`,
+      },
+    ],
+    sell: [
+      {
+        label: `RSI ${SIGNAL_PARAMS.rsiSellMin} atau lebih tinggi (jenuh beli)`,
+        ok: r === null ? null : r >= SIGNAL_PARAMS.rsiSellMin,
+        detail:
+          r === null
+            ? miss
+            : r >= SIGNAL_PARAMS.rsiSellMin
+              ? `RSI ${r.toFixed(1)}`
+              : `RSI ${r.toFixed(1)}, masih ${(SIGNAL_PARAMS.rsiSellMin - r).toFixed(1)} poin di bawah batas`,
+      },
+    ],
+  };
+}
 
 export function computeSignal(a: MarketAnalysis, strategy: Strategy, pairId: string): Signal {
   if (isStablecoin(pairId)) {
@@ -263,5 +353,13 @@ export function computeSignal(a: MarketAnalysis, strategy: Strategy, pairId: str
           ? "BUY ditunda oleh saringan risiko: tunggu kondisi yang lebih menguntungkan."
           : "Belum ada sinyal jelas: tunggu, atau tahan kalau sudah punya.";
 
-  return finalize(dataMissing ? "HOLD" : action, strategy, headline, reasons, checks, blockedBy);
+  return finalize(
+    dataMissing ? "HOLD" : action,
+    strategy,
+    headline,
+    reasons,
+    checks,
+    blockedBy,
+    buildConditions(a, strategy),
+  );
 }

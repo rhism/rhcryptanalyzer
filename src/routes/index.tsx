@@ -15,6 +15,7 @@ import { exitNote } from "@/lib/evidence";
 import { SignalCard } from "@/components/SignalCard";
 import { checkSession } from "@/lib/lock.functions";
 import { MarketSummary } from "@/components/MarketSummary";
+import { BacktestPanel } from "@/components/BacktestPanel";
 
 
 
@@ -109,7 +110,7 @@ const STRATEGIES: { value: StrategyKey; label: string; desc: string }[] = [
 ];
 
 function Index() {
-  const [tab, setTab] = useState<"analisis" | "pasar">("analisis");
+  const [tab, setTab] = useState<"analisis" | "pasar" | "backtest">("analisis");
   const [pair, setPair] = useState<string>("bnbidr");
   const [pairs, setPairs] = useState<PairInfo[]>(FALLBACK_PAIRS);
   const [pairsSource, setPairsSource] = useState<"loading" | "live" | "fallback">("loading");
@@ -318,11 +319,12 @@ function Index() {
           </p>
         </div>
 
-        <div className="mb-8 inline-flex w-full max-w-md rounded-lg border border-[color:var(--neon-violet)]/60 bg-black/30 p-1 sm:w-auto">
+        <div className="mb-8 inline-flex w-full max-w-lg rounded-lg border border-[color:var(--neon-violet)]/60 bg-black/30 p-1 sm:w-auto">
           {(
             [
               { value: "analisis", label: "Analisis Koin" },
               { value: "pasar", label: "Ringkasan Pasar" },
+              { value: "backtest", label: "Backtest" },
             ] as const
           ).map((t) => (
             <button
@@ -343,6 +345,8 @@ function Index() {
 
         {tab === "pasar" ? (
           <MarketSummary />
+        ) : tab === "backtest" ? (
+          <BacktestPanel pairs={pairs} defaultPair={pair} />
         ) : (
         <>
         <header className="mb-8 flex flex-col gap-4 sm:mb-10">
