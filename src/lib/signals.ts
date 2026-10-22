@@ -34,6 +34,9 @@ export type Condition = { label: string; ok: boolean | null; detail: string };
 export type Conditions = { buy: Condition[]; sell: Condition[] };
 const NO_CONDITIONS: Conditions = { buy: [], sell: [] };
 
+export type Guidance = { notOwned: string; owned: string };
+const NO_GUIDANCE: Guidance = { notOwned: "", owned: "" };
+
 export type Signal = {
   action: SignalAction;
   strategy: Strategy;
@@ -49,6 +52,8 @@ export type Signal = {
   blockedBy: string | null;
   /** Syarat BUY dan SELL beserta status tiap syarat, supaya terlihat kenapa sinyalnya HOLD. */
   conditions: Conditions;
+  /** Arti sinyal dalam bahasa sehari-hari untuk orang yang BELUM dan yang SUDAH punya koinnya. */
+  guidance: Guidance;
 };
 
 const STABLECOINS = new Set([
@@ -91,6 +96,7 @@ const finalize = (
   checks: Check[],
   blockedBy: string | null,
   conditions: Conditions = NO_CONDITIONS,
+  guidance: Guidance = NO_GUIDANCE,
 ): Signal => ({
   action,
   strategy,
@@ -101,7 +107,45 @@ const finalize = (
   total: checks.length,
   blockedBy,
   conditions,
+  guidance,
 });
+
+function buildGuidance(
+  action: "BUY" | "HOLD" | "SELL",
+  blocked: boolean,
+  dataMissing: boolean,
+  a: MarketAnalysis,
+): Guidance {
+  const stop = a.plan ? ` Stop-loss acuan ${f(a.plan.stopLoss)}.` : "";
+  if (dataMissing) {
+    return {
+      notOwned: "TUNGGU: data belum cukup untuk memberi sinyal, jadi jangan masuk dulu.",
+      owned: "TAHAN dengan hati-hati: data belum cukup untuk menilai.",
+    };
+  }
+  if (action === "BUY") {
+    return {
+      notOwned: `BELI: syarat masuk terpenuhi.${stop} Ukuran posisi ada di bawah.`,
+      owned: `TAHAN: syarat beli masih terpenuhi. Jangan menambah di luar rencana.${stop}`,
+    };
+  }
+  if (action === "SELL") {
+    return {
+      notOwned: "JANGAN BELI: sinyal menunjukkan tekanan turun.",
+      owned:
+        "PERTIMBANGKAN JUAL: sinyal menunjukkan tekanan turun. Kalau tetap menahan, tetapkan stop-loss.",
+    };
+  }
+  return blocked
+    ? {
+        notOwned: "TUNGGU: ada sinyal beli, tapi ditunda saringan risiko. Jangan masuk dulu.",
+        owned: `TAHAN: belum ada sinyal jual.${stop}`,
+      }
+    : {
+        notOwned: "TUNGGU: belum ada sinyal beli. Jangan masuk dulu.",
+        owned: `TAHAN: belum ada sinyal jual.${stop}`,
+      };
+}
 
 function buildConditions(a: MarketAnalysis, strategy: Strategy): Conditions {
   const price = a.price;
@@ -353,13 +397,15 @@ export function computeSignal(a: MarketAnalysis, strategy: Strategy, pairId: str
           ? "BUY ditunda oleh saringan risiko: tunggu kondisi yang lebih menguntungkan."
           : "Belum ada sinyal jelas: tunggu, atau tahan kalau sudah punya.";
 
+  const finalAction = dataMissing ? "HOLD" : action;
   return finalize(
-    dataMissing ? "HOLD" : action,
+    finalAction,
     strategy,
     headline,
     reasons,
     checks,
     blockedBy,
     buildConditions(a, strategy),
+    buildGuidance(finalAction, blockedBy !== null, dataMissing, a),
   );
 }

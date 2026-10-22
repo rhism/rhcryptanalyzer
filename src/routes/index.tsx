@@ -16,6 +16,8 @@ import { SignalCard } from "@/components/SignalCard";
 import { checkSession } from "@/lib/lock.functions";
 import { MarketSummary } from "@/components/MarketSummary";
 import { BacktestPanel } from "@/components/BacktestPanel";
+import { JournalPanel } from "@/components/JournalPanel";
+import { parseJournal, exportJournal, JOURNAL_MAX_ENTRIES, type JournalEntry } from "@/lib/journal";
 
 
 
@@ -110,7 +112,7 @@ const STRATEGIES: { value: StrategyKey; label: string; desc: string }[] = [
 ];
 
 function Index() {
-  const [tab, setTab] = useState<"analisis" | "pasar" | "backtest">("analisis");
+  const [tab, setTab] = useState<"analisis" | "pasar" | "backtest" | "jurnal">("analisis");
   const [pair, setPair] = useState<string>("bnbidr");
   const [pairs, setPairs] = useState<PairInfo[]>(FALLBACK_PAIRS);
   const [pairsSource, setPairsSource] = useState<"loading" | "live" | "fallback">("loading");
@@ -173,7 +175,9 @@ function Index() {
         takerFeePct: pairInfo?.takerFeePct ?? null,
         minOrderIdr: pairInfo?.minOrderIdr ?? null,
         strategy,
+        pairId: pair,
       });
+      setLoggedSignal(false);
       if (sig.action === "NA") {
         setUpdatedAt(new Date());
         return;
@@ -259,11 +263,15 @@ function Index() {
     takerFeePct: number | null;
     minOrderIdr: number | null;
     strategy: StrategyKey;
+    pairId: string;
   } | null>(null);
   const [aiError, setAiError] = useState<AiErrorInfo | null>(null);
   const [capitalText, setCapitalText] = useState("");
   const [riskText, setRiskText] = useState(String(SIZING_PARAMS.defaultRiskPct));
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [journal, setJournal] = useState<JournalEntry[]>([]);
+  const [storageOk, setStorageOk] = useState(true);
+  const [loggedSignal, setLoggedSignal] = useState(false);
 
   // Modal & persen risiko disimpan di browser ini saja (tidak dikirim ke server).
   useEffect(() => {
@@ -272,8 +280,13 @@ function Index() {
       if (c && /^\d+$/.test(c)) setCapitalText(c);
       const r = localStorage.getItem("rhc_riskpct_v1");
       if (r && Number.isFinite(Number(r.replace(",", ".")))) setRiskText(r);
+      const j = localStorage.getItem("rhc_journal_v1");
+      if (j) {
+        const parsed = parseJournal(j);
+        if (!parsed.error) setJournal(parsed.entries);
+      }
     } catch {
-      // ignore
+      setStorageOk(false);
     }
     setPrefsLoaded(true);
   }, []);
@@ -286,6 +299,39 @@ function Index() {
       // ignore
     }
   }, [prefsLoaded, capitalText, riskText]);
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    try {
+      localStorage.setItem("rhc_journal_v1", exportJournal(journal));
+    } catch {
+      setStorageOk(false);
+    }
+  }, [prefsLoaded, journal]);
+
+  const logSignal = (opts: { hype: boolean; note: string }) => {
+    if (!signal || !runInfo || !ticker || signal.action === "NA") return;
+    if (journal.length >= JOURNAL_MAX_ENTRIES) return;
+    const price0 = Number(ticker.last);
+    if (!Number.isFinite(price0) || price0 <= 0) return;
+    const createdAt = Math.floor(Date.now() / 1000);
+    const entry: JournalEntry = {
+      id: `${createdAt}-${Math.random().toString(36).slice(2, 8)}`,
+      createdAt,
+      kind: "signal",
+      pairId: runInfo.pairId,
+      price0,
+      strategy: signal.strategy,
+      action: signal.action,
+      stop: indicators?.plan?.stopLoss ?? null,
+      target1: indicators?.plan?.target1 ?? null,
+      target2: indicators?.plan?.target2 ?? null,
+      hype: opts.hype,
+      source: "Sistem",
+      note: opts.note.trim() || undefined,
+    };
+    setJournal([entry, ...journal]);
+    setLoggedSignal(true);
+  };
 
   const sizing = useMemo<Sizing>(
     () =>
@@ -319,12 +365,13 @@ function Index() {
           </p>
         </div>
 
-        <div className="mb-8 inline-flex w-full max-w-lg rounded-lg border border-[color:var(--neon-violet)]/60 bg-black/30 p-1 sm:w-auto">
+        <div className="mb-8 inline-flex w-full max-w-xl rounded-lg border border-[color:var(--neon-violet)]/60 bg-black/30 p-1 sm:w-auto">
           {(
             [
               { value: "analisis", label: "Analisis Koin" },
               { value: "pasar", label: "Ringkasan Pasar" },
               { value: "backtest", label: "Backtest" },
+              { value: "jurnal", label: "Jurnal" },
             ] as const
           ).map((t) => (
             <button
@@ -347,6 +394,14 @@ function Index() {
           <MarketSummary />
         ) : tab === "backtest" ? (
           <BacktestPanel pairs={pairs} defaultPair={pair} />
+        ) : tab === "jurnal" ? (
+          <JournalPanel
+            entries={journal}
+            onChange={setJournal}
+            pairs={pairs}
+            defaultPair={pair}
+            storageOk={storageOk}
+          />
         ) : (
         <>
         <header className="mb-8 flex flex-col gap-4 sm:mb-10">
@@ -475,6 +530,8 @@ function Index() {
             onCapitalChange={setCapitalText}
             riskText={riskText}
             onRiskChange={setRiskText}
+            onLog={logSignal}
+            logged={loggedSignal}
           />
         )}
 

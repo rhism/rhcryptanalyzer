@@ -91,16 +91,17 @@ function Box({
   );
 }
 
-function EquityChart({ done }: { done: Done }) {
+function EquityChart({ done, mode }: { done: Done; mode: "compare" | "strategy" }) {
   const { result, candles, bh } = done;
   const first = result.startIndex;
   const s0 = done.cfg.startEquity;
-  const pts = (vals: number[], from: number) =>
-    vals.map((v, k) => ({ x: from + k, y: Math.log(Math.max(v, 1e-9)) }));
-  const a = [{ x: first, y: Math.log(s0) }, ...pts(result.equity, first)];
-  const b = [{ x: first, y: Math.log(s0) }, ...pts(bh, first + 1)];
+  const log = mode === "compare";
+  const tf = (v: number) => (log ? Math.log(Math.max(v, 1e-9)) : v);
+  const pts = (vals: number[], from: number) => vals.map((v, k) => ({ x: from + k, y: tf(v) }));
+  const a = [{ x: first, y: tf(s0) }, ...pts(result.equity, first)];
+  const b = log ? [{ x: first, y: tf(s0) }, ...pts(bh, first + 1)] : [];
   const xs = [first, candles.length - 1];
-  const ys = [...a, ...b].map((p) => p.y);
+  const ys = [...a, ...b].map((q) => q.y);
   const yMin = Math.min(...ys);
   const yMax = Math.max(...ys);
   const W = 640;
@@ -122,17 +123,17 @@ function EquityChart({ done }: { done: Done }) {
   const yTicks = [yMin, (yMin + yMax) / 2, yMax];
   return (
     <svg
-      data-testid="bt-chart"
+      data-testid={log ? "bt-chart" : "bt-chart-strategy"}
       viewBox={`0 0 ${W} ${H}`}
       className="w-full"
       role="img"
-      aria-label="Kurva modal strategi dan buy and hold"
+      aria-label={log ? "Kurva modal strategi dan buy and hold" : "Kurva modal strategi saja"}
     >
       {yTicks.map((t) => (
         <g key={t}>
           <line x1={L} x2={W - R} y1={py(t)} y2={py(t)} stroke="rgba(255,255,255,0.1)" />
           <text x={L - 4} y={py(t) + 3} textAnchor="end" fontSize="9" fill="rgba(255,255,255,0.6)">
-            {fmt(Math.exp(t), Math.exp(t) < 10 ? 1 : 0)}
+            {fmt(log ? Math.exp(t) : t, (log ? Math.exp(t) : t) < 10 ? 1 : 0)}
           </text>
         </g>
       ))}
@@ -148,7 +149,7 @@ function EquityChart({ done }: { done: Done }) {
           {t.label}
         </text>
       ))}
-      <path d={path(b)} fill="none" stroke="#FF8A3D" strokeWidth="1.5" opacity="0.9" />
+      {log && <path d={path(b)} fill="none" stroke="#FF8A3D" strokeWidth="1.5" opacity="0.9" />}
       <path d={path(a)} fill="none" stroke="#6EE7B7" strokeWidth="2" />
     </svg>
   );
@@ -447,7 +448,15 @@ export function BacktestPanel({ pairs, defaultPair }: { pairs: PairInfo[]; defau
               Kurva modal (skala logaritmik): <span className="text-emerald-300">strategi</span> vs{" "}
               <span className="text-orange-300">buy &amp; hold</span>, keduanya mulai dari 100
             </p>
-            <EquityChart done={done} />
+            <EquityChart done={done} mode="compare" />
+          </div>
+
+          <div className="mb-5 rounded-lg border border-white/15 bg-black/20 p-3">
+            <p className="mb-2 text-[11px] uppercase tracking-widest text-white/60">
+              Kurva modal <span className="text-emerald-300">strategi saja</span> (skala biasa,
+              mulai dari 100), supaya naik-turunnya terlihat jelas
+            </p>
+            <EquityChart done={done} mode="strategy" />
           </div>
 
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-neon-orange">

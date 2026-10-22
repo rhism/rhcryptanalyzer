@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { formatIdr } from "@/lib/format";
 import { SIZING_PARAMS, type Sizing } from "@/lib/sizing";
 import type { Signal, SignalAction } from "@/lib/signals";
@@ -33,6 +34,8 @@ export function SignalCard({
   onCapitalChange,
   riskText,
   onRiskChange,
+  onLog,
+  logged,
 }: {
   signal: Signal;
   strategyLabel: string;
@@ -41,7 +44,11 @@ export function SignalCard({
   onCapitalChange: (digitsOnly: string) => void;
   riskText: string;
   onRiskChange: (v: string) => void;
+  onLog?: (opts: { hype: boolean; note: string }) => void;
+  logged?: boolean;
 }) {
+  const [logHype, setLogHype] = useState(false);
+  const [logNote, setLogNote] = useState("");
   const badge = BADGE[signal.action];
   const evidence = signal.action === "NA" ? null : evidenceFor(signal.strategy);
   const capitalShown = capitalText
@@ -69,6 +76,65 @@ export function SignalCard({
       </div>
 
       <p className="mb-4 text-base font-medium text-white">{signal.headline}</p>
+
+      {signal.guidance.notOwned && (
+        <div data-testid="guidance" className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {(
+            [
+              ["Kalau kamu BELUM punya koin ini", signal.guidance.notOwned],
+              ["Kalau kamu SUDAH punya koin ini", signal.guidance.owned],
+            ] as const
+          ).map(([title, text]) => (
+            <div
+              key={title}
+              className="rounded-lg border border-[color:var(--neon-violet)]/50 bg-black/25 p-3"
+            >
+              <p className="text-[11px] uppercase tracking-widest text-white/60">{title}</p>
+              <p className="mt-1 text-sm font-semibold text-white">{text}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {onLog && signal.action !== "NA" && (
+        <div
+          data-testid="log-signal"
+          className="mb-4 rounded-lg border border-white/15 bg-black/20 p-3"
+        >
+          <p className="mb-2 text-[11px] uppercase tracking-widest text-white/60">Jurnal</p>
+          {logged ? (
+            <p className="text-sm text-emerald-200">
+              Tercatat di tab Jurnal. Hasilnya akan dinilai dari harga setelah ini.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-sm text-white/85">
+                <input
+                  type="checkbox"
+                  aria-label="Hype untuk sinyal"
+                  checked={logHype}
+                  onChange={(e) => setLogHype(e.target.checked)}
+                />
+                Ada hype/narasi di sosial media untuk koin ini
+              </label>
+              <input
+                aria-label="Catatan sinyal"
+                value={logNote}
+                onChange={(e) => setLogNote(e.target.value.slice(0, 500))}
+                placeholder="Catatan (opsional)"
+                className="rounded-md border border-white/20 bg-black/30 px-3 py-1.5 text-sm text-white placeholder:text-white/35"
+              />
+              <button
+                type="button"
+                onClick={() => onLog({ hype: logHype, note: logNote })}
+                className="self-start rounded-lg border border-white/30 px-4 py-1.5 text-sm font-semibold text-white"
+              >
+                Catat sinyal ini ke jurnal
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {evidence && evidence.level === "warning" && (
         <div
