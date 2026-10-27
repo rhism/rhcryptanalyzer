@@ -10,15 +10,52 @@ import type { SignalAction, Strategy } from "./signals";
  *  - Hanya candle yang sudah SELESAI yang dipakai.
  *  - Sinyal BUY: dinilai seperti transaksi: keluar di stop-loss atau Target 2 (stop didahulukan kalau keduanya
  *    tersentuh di hari yang sama; gap melewati stop = keluar di harga buka), maksimal 30 hari lalu ditutup di
- *    harga penutupan hari ke-30. Hasilnya dalam R (untung/rugi dibagi jarak entry ke stop), tanpa biaya.
+ *    harga penutupan hari ke-30. Hasilnya dalam R (untung/rugi dibagi jarak entry ke stop). Ada dua angka: R kotor
+ *    (tanpa biaya) dan R BERSIH (sudah dikurangi perkiraan biaya dan slippage di kedua sisi). Penilaian benar/salah
+ *    memakai R BERSIH, karena sinyal yang untung sebelum biaya bisa rugi setelah biaya.
  *  - Sinyal SELL: benar kalau harga penutupan hari ke-7 lebih rendah dari harga saat dicatat.
  *  - Sinyal HOLD: tidak dinilai (hanya dicatat perubahan harganya).
  *  - Tebakan: benar kalau pada hari ke-horizon harga penutupan searah tebakan; kalau ada harga target, benar
- *    juga bila target tersentuh lebih dulu (high untuk naik, low untuk turun) dalam horizon itu.
+ *    juga bila target tersentuh lebih dulu (high untuk naik, low untuk turun) dalam horizon itu. Target hanya
+ *    berlaku kalau berada di sisi yang benar dari harga awal (di atasnya untuk naik, di bawahnya untuk turun);
+ *    target di sisi yang salah diabaikan, supaya tidak otomatis 'tersentuh' di hari pertama.
  */
 
 export const JOURNAL_MAX_ENTRIES = 2000;
 export const BUY_MAX_DAYS = 30;
+
+/** Perkiraan biaya per sisi (persen), sama dengan nilai bawaan backtest. */
+export const JOURNAL_COSTS = { feePctPerSide: 0.2, slippagePctPerSide: 0.1 } as const;
+export type JournalCosts = { feePctPerSide: number; slippagePctPerSide: number };
+
+/** R bersih: untung/rugi per unit setelah biaya dan slippage di kedua sisi, dibagi jarak entry ke stop. */
+export function netR(
+  price0: number,
+  exit: number,
+  risk: number,
+  c: JournalCosts = JOURNAL_COSTS,
+): number {
+  const fee = c.feePctPerSide / 100;
+  const slip = c.slippagePctPerSide / 100;
+  const pnl = exit * (1 - slip) * (1 - fee) - price0 * (1 + slip) * (1 + fee);
+  return pnl / risk;
+}
+
+/** Target tebakan valid hanya kalau di sisi yang benar dari harga awal. */
+export function validGuessTarget(
+  direction: "naik" | "turun" | undefined,
+  price0: number,
+  target: number | null | undefined,
+): number | null {
+  if (target == null || !Number.isFinite(target) || target <= 0) return null;
+  return direction === "turun"
+    ? target < price0
+      ? target
+      : null
+    : target > price0
+      ? target
+      : null;
+}
 
 export type JournalEntry = {
   id: string;
@@ -54,15 +91,23 @@ export type Outcome = {
   pct14: number | null;
   verdict: Verdict;
   detail: string;
-  /** Hanya untuk sinyal BUY yang sudah selesai. */
+  /** Hanya untuk sinyal BUY yang sudah selesai: R kotor (tanpa biaya). */
   rMultiple: number | null;
+  /** R bersih setelah perkiraan biaya dan slippage; inilah yang dipakai untuk menilai benar/salah. */
+  rNet: number | null;
   exit: "stop" | "target" | "waktu habis" | null;
 };
 
 const d0Of = (e: JournalEntry) => Math.floor(e.createdAt / DAY_SECONDS) * DAY_SECONDS;
 const fmtPct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
+const fmtR = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}`;
 
-export function evaluateEntry(e: JournalEntry, candles: Candle[], nowSec: number): Outcome {
+export function evaluateEntry(
+  e: JournalEntry,
+  candles: Candle[],
+  nowSec: number,
+  costs: JournalCosts = JOURNAL_COSTS,
+): Outcome {
   const d0 = d0Of(e);
   const byTime = new Map(candles.map((c) => [c.time, c]));
   const day = (n: number): Candle | undefined => {
@@ -73,7 +118,14 @@ export function evaluateEntry(e: JournalEntry, candles: Candle[], nowSec: number
     const c = day(n);
     return c ? (c.close / e.price0 - 1) * 100 : null;
   };
-  const base = { pct3: pct(3), pct7: pct(7), pct14: pct(14), rMultiple: null, exit: null } as const;
+  const base = {
+    pct3: pct(3),
+    pct7: pct(7),
+    pct14: pct(14),
+    rMultiple: null,
+    rNet: null,
+    exit: null,
+  } as const;
   const wait = (detail: string): Outcome => ({ ...base, verdict: "menunggu", detail });
 
   if (e.kind === "signal") {
@@ -89,35 +141,41 @@ export function evaluateEntry(e: JournalEntry, candles: Candle[], nowSec: number
         if (c.low <= e.stop) {
           const exit = Math.min(e.stop, c.open);
           const r = (exit - e.price0) / risk;
+          const rn = netR(e.price0, exit, risk, costs);
           return {
             ...base,
-            verdict: r > 0 ? "benar" : "salah",
+            verdict: rn > 0 ? "benar" : "salah",
             rMultiple: r,
+            rNet: rn,
             exit: "stop",
-            detail: `Kena stop-loss di hari ke-${n}: ${r.toFixed(2)}R.`,
+            detail: `Kena stop-loss di hari ke-${n}: ${fmtR(r)}R kotor, ${fmtR(rn)}R bersih biaya.`,
           };
         }
         if (target !== null && c.high >= target) {
           const exit = Math.max(target, c.open);
           const r = (exit - e.price0) / risk;
+          const rn = netR(e.price0, exit, risk, costs);
           return {
             ...base,
-            verdict: r > 0 ? "benar" : "salah",
+            verdict: rn > 0 ? "benar" : "salah",
             rMultiple: r,
+            rNet: rn,
             exit: "target",
-            detail: `Mencapai Target 2 di hari ke-${n}: ${r >= 0 ? "+" : ""}${r.toFixed(2)}R.`,
+            detail: `Mencapai Target 2 di hari ke-${n}: ${fmtR(r)}R kotor, ${fmtR(rn)}R bersih biaya.`,
           };
         }
       }
       const last = day(BUY_MAX_DAYS);
       if (!last) return wait("Transaksi masih berjalan.");
       const r = (last.close - e.price0) / risk;
+      const rn = netR(e.price0, last.close, risk, costs);
       return {
         ...base,
-        verdict: r > 0 ? "benar" : "salah",
+        verdict: rn > 0 ? "benar" : "salah",
         rMultiple: r,
+        rNet: rn,
         exit: "waktu habis",
-        detail: `Tidak kena stop atau target dalam ${BUY_MAX_DAYS} hari; ditutup di harga penutupan: ${r >= 0 ? "+" : ""}${r.toFixed(2)}R.`,
+        detail: `Tidak kena stop atau target dalam ${BUY_MAX_DAYS} hari; ditutup di harga penutupan: ${fmtR(r)}R kotor, ${fmtR(rn)}R bersih biaya.`,
       };
     }
     if (e.action === "SELL") {
@@ -138,10 +196,11 @@ export function evaluateEntry(e: JournalEntry, candles: Candle[], nowSec: number
   // ---- tebakan pribadi ----
   const h = Math.min(Math.max(Math.round(e.horizonDays ?? 7), 1), BUY_MAX_DAYS);
   const up = e.direction !== "turun";
+  const tp = validGuessTarget(e.direction, e.price0, e.targetPrice);
   for (let n = 1; n <= h; n++) {
     const c = day(n);
     if (!c) return wait(`Menunggu hari ke-${n} dari ${h}.`);
-    if (e.targetPrice != null && (up ? c.high >= e.targetPrice : c.low <= e.targetPrice)) {
+    if (tp !== null && (up ? c.high >= tp : c.low <= tp)) {
       return { ...base, verdict: "benar", detail: `Target tebakan tersentuh di hari ke-${n}.` };
     }
   }
@@ -188,7 +247,7 @@ export function summarizeJournal(
     if (!o) continue;
     if (e.kind === "signal" && e.action === "BUY") {
       add(buy, o);
-      if (o.rMultiple !== null) rs.push(o.rMultiple);
+      if (o.rNet !== null) rs.push(o.rNet);
     } else if (e.kind === "signal" && e.action === "SELL") add(sell, o);
     else if (e.kind === "guess") {
       add(guess, o);
@@ -233,7 +292,11 @@ export function sanitizeEntry(raw: unknown): JournalEntry | null {
     }
   } else {
     e.direction = r.direction === "turun" ? "turun" : "naik";
-    e.targetPrice = isNum(r.targetPrice) && r.targetPrice > 0 ? r.targetPrice : null;
+    e.targetPrice = validGuessTarget(
+      e.direction,
+      e.price0,
+      isNum(r.targetPrice) ? r.targetPrice : null,
+    );
     e.horizonDays = isNum(r.horizonDays)
       ? Math.min(Math.max(Math.round(r.horizonDays), 1), BUY_MAX_DAYS)
       : 7;

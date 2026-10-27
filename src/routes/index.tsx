@@ -308,6 +308,9 @@ function Index() {
     }
   }, [prefsLoaded, journal]);
 
+  // Hasil di layar milik analisis TERAKHIR. Kalau pilihan koin atau strategi berubah, hasilnya usang sampai Refresh ditekan.
+  const stale = runInfo !== null && (runInfo.pairId !== pair || runInfo.strategy !== strategy);
+
   const logSignal = (opts: { hype: boolean; note: string }) => {
     if (!signal || !runInfo || !ticker || signal.action === "NA") return;
     if (journal.length >= JOURNAL_MAX_ENTRIES) return;
@@ -503,10 +506,26 @@ function Index() {
           </div>
         )}
 
+        {stale && runInfo && !loading && (
+          <div
+            data-testid="stale-banner"
+            className="mb-6 rounded-xl border-2 border-yellow-400/70 bg-yellow-500/15 p-4 text-sm text-yellow-50"
+          >
+            <p className="font-semibold">Hasil di bawah sudah usang</p>
+            <p className="mt-1">
+              Hasil ini untuk <strong>{runInfo.pairId.toUpperCase()}</strong> dengan strategi{" "}
+              <strong>{STRATEGIES.find((x) => x.value === runInfo.strategy)?.label}</strong>, sedangkan pilihanmu sekarang{" "}
+              <strong>{pair.toUpperCase()}</strong> dengan strategi{" "}
+              <strong>{STRATEGIES.find((x) => x.value === strategy)?.label}</strong>. Tekan Refresh Analysis supaya hasilnya sesuai, dan
+              jangan bertindak berdasarkan hasil lama ini.
+            </p>
+          </div>
+        )}
+
         {ticker && !loading && (
           <section className="neon-card-violet mb-6 rounded-2xl p-5 sm:p-7">
             <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-neon-orange">
-              Market snapshot — {pair.toUpperCase()}
+              Market snapshot — {(runInfo?.pairId ?? pair).toUpperCase()}
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <Stat label="Harga sekarang" value={formatIDR(ticker.last)} accent />

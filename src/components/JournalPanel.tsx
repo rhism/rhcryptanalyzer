@@ -7,6 +7,7 @@ import {
   JOURNAL_MAX_ENTRIES,
   parseJournal,
   summarizeJournal,
+  validGuessTarget,
   type JournalEntry,
   type Outcome,
   type Tally,
@@ -147,6 +148,15 @@ export function JournalPanel({
       const t = (await getTicker({ data: { pair } })) as { last: string };
       const price0 = Number(t.last);
       if (!Number.isFinite(price0) || price0 <= 0) throw new Error("Harga sekarang tidak valid.");
+      if (target !== null && validGuessTarget(direction, price0, target) === null) {
+        setErr(
+          direction === "naik"
+            ? `Untuk tebakan naik, harga target harus di atas harga sekarang (${formatIdr(price0)}).`
+            : `Untuk tebakan turun, harga target harus di bawah harga sekarang (${formatIdr(price0)}).`,
+        );
+        setBusy(false);
+        return;
+      }
       const createdAt = Math.floor(Date.now() / 1000);
       const entry: JournalEntry = {
         id: `${createdAt}-${Math.random().toString(36).slice(2, 8)}`,
@@ -226,9 +236,9 @@ export function JournalPanel({
         <Stat id="jr-total" label="Jumlah catatan" value={String(entries.length)} />
         <Stat
           id="jr-buy"
-          label="Sinyal BUY benar"
+          label="Sinyal BUY benar (bersih biaya)"
           value={rate(summary.buy)}
-          hint={`${summary.buy.pending} menunggu · rata-rata ${summary.buy.avgR === null ? "-" : summary.buy.avgR.toFixed(2).replace(".", ",") + "R"}`}
+          hint={`${summary.buy.pending} menunggu · rata-rata ${summary.buy.avgR === null ? "-" : summary.buy.avgR.toFixed(2).replace(".", ",") + "R bersih"}`}
         />
         <Stat
           id="jr-sell"
@@ -245,6 +255,11 @@ export function JournalPanel({
         <Stat id="jr-hype" label="Tebakan dengan hype" value={rate(summary.guessHype)} />
         <Stat id="jr-nohype" label="Tebakan tanpa hype" value={rate(summary.guessNoHype)} />
       </div>
+      <p className="mb-3 text-xs text-white/60" data-testid="jr-note">
+        Persen benar bukan keuntungan: sinyal bisa sering benar tapi tetap merugi setelah biaya.
+        Sinyal BUY dinilai dari R bersih (perkiraan biaya 0,2% + slippage 0,1% per sisi), jadi
+        perhatikan juga rata-rata R-nya, bukan hanya persen benarnya.
+      </p>
       {summary.guess.n + summary.buy.n < 30 && (
         <p className="mb-4 text-xs text-yellow-200" data-testid="jr-small">
           Baru {summary.guess.n + summary.buy.n} catatan yang sudah dinilai. Di bawah sekitar 30,
@@ -312,7 +327,7 @@ export function JournalPanel({
             inputMode="decimal"
             value={targetText}
             onChange={(e) => setTargetText(e.target.value.replace(/[^\d.,]/g, "").slice(0, 14))}
-            placeholder="mis. 500"
+            placeholder="naik: di atas harga sekarang"
             className="rounded-md border border-[color:var(--neon-magenta)]/60 bg-black/30 px-3 py-2 text-sm normal-case tracking-normal text-white placeholder:text-white/35"
           />
         </label>
